@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Environment
+.env
+.venv/
+venv/
+
+# VS Code
+.vscode/
+
+# Node
+node_modules/
+dist/
+
+# Testing
+.pytest_cache/
+.coverage
