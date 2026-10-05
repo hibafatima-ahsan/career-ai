@@ -25,7 +25,10 @@ function App() {
   });
 
   const [message, setMessage] = useState("");
-
+  const [question, setQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [careerQuestion, setCareerQuestion] = useState("");
+  const [careerResult, setCareerResult] = useState(null);
   useEffect(() => {
     if (page === "dashboard") {
       loadInternships();
@@ -129,7 +132,56 @@ function App() {
       );
     }
   };
+const askCareerAI = async () => {
+  try {
+    const token = localStorage.getItem("token");
 
+    const response = await axios.post(
+      `${API}/ai/ask`,
+      {
+        question: question
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    setAiAnswer(response.data.answer);
+  } catch (error) {
+    setAiAnswer(
+      error.response?.data?.error ||
+      "AI assistant could not respond."
+    );
+  }
+  const getCareerRecommendation = async () => {
+  try {
+    const token = localStorage.getItem("token");
+
+    const response = await axios.post(
+      `${API}/ai/career-recommendation`,
+      {
+        question: careerQuestion
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    setCareerResult(response.data);
+  } catch (error) {
+    console.error(error);
+    setCareerResult({
+      error:
+        error.response?.data?.error ||
+        "Could not generate career recommendation."
+    });
+  }
+};
+};
   const logout = () => {
     localStorage.removeItem("token");
     setUser(null);
@@ -333,9 +385,28 @@ function App() {
             based on your skills and profile.
           </p>
 
-          <button>
-            Ask CareerAI
-          </button>
+           <div>
+  <textarea
+    placeholder="Ask CareerAI anything..."
+    value={question}
+    onChange={(e) => setQuestion(e.target.value)}
+    rows="4"
+    cols="50"
+  />
+
+  <br />
+
+  <button onClick={askCareerAI}>
+    Ask CareerAI
+  </button>
+
+  {aiAnswer && (
+    <div className="card">
+      <h3>CareerAI Response</h3>
+      <p>{aiAnswer}</p>
+    </div>
+  )}
+</div>
         </>
       )}
     </div>

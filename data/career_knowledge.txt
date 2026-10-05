@@ -1,0 +1,27 @@
+CareerAI Career Knowledge
+
+Python:
+Python is useful for backend development, automation, data analysis, artificial intelligence and machine learning.
+Common Python careers include Python Developer, Backend Developer, Data Analyst and AI/ML Engineer.
+
+Flask:
+Flask is a lightweight Python web framework used to build APIs and backend applications.
+Students who know Flask can apply for Python Backend Developer and Web Development internships.
+
+Machine Learning:
+Machine learning uses data and algorithms to make predictions or decisions.
+Important beginner skills include NumPy, Pandas, Matplotlib, Scikit-learn and basic statistics.
+
+Artificial Intelligence:
+AI internships commonly require Python, machine learning fundamentals, APIs and sometimes frameworks such as LangChain.
+
+React:
+React is a JavaScript library for building user interfaces.
+React skills are useful for Frontend Developer and Full Stack Developer internships.
+
+Full Stack Development:
+A full stack developer works with frontend, backend and databases.
+Common technologies include React, JavaScript, Python, Flask, REST APIs, SQL and Git.
+
+Career Advice:
+Students should choose internships based on their current skills while also selecting opportunities that help them learn new industry skills.
