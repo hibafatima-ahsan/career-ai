@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
-const API = "http://127.0.0.1:5000/api";
-
+const API = "https://hibafatima.pythonanywhere.com/api";
 function App() {
   const [page, setPage] = useState("login");
   const [user, setUser] = useState(null);
