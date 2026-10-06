@@ -3,7 +3,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
-# Load backend/.env
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -20,5 +19,4 @@ def ask_ai(question):
         model="gemini-3.5-flash-lite",
         contents=question
     )
-
     return response.text
