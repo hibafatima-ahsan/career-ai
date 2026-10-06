@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 
 const API = "https://hibafatima.pythonanywhere.com/api";
+
 function App() {
   const [page, setPage] = useState("login");
   const [user, setUser] = useState(null);
@@ -37,9 +38,110 @@ function App() {
 
   const [adminStats, setAdminStats] = useState(null);
 
-  // -----------------------------
+  // ==========================================
+  // EMAIL VERIFICATION
+  // ==========================================
+
+  const currentPath = window.location.pathname;
+
+  const verificationToken = new URLSearchParams(
+    window.location.search
+  ).get("token");
+
+  const isVerificationPage =
+    currentPath === "/verify-email" || Boolean(verificationToken);
+
+  const [verificationMessage, setVerificationMessage] = useState(
+    "Verifying your email..."
+  );
+
+  const [verificationSuccess, setVerificationSuccess] = useState(false);
+
+  const [verificationLoading, setVerificationLoading] = useState(
+    isVerificationPage
+  );
+
+  useEffect(() => {
+    if (!isVerificationPage) {
+      return;
+    }
+
+    if (!verificationToken) {
+      setVerificationLoading(false);
+      setVerificationSuccess(false);
+      setVerificationMessage(
+        "Verification token is missing. Please use the verification link sent to your email."
+      );
+      return;
+    }
+
+    let cancelled = false;
+
+    const verifyEmail = async () => {
+      try {
+        setVerificationLoading(true);
+        setVerificationMessage("Verifying your email...");
+        setVerificationSuccess(false);
+
+        const verificationUrl =
+          `${API}/auth/verify-email?token=${encodeURIComponent(
+            verificationToken
+          )}`;
+
+        const response = await fetch(verificationUrl, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+
+        const data = await response.json();
+
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          setVerificationSuccess(false);
+          setVerificationMessage(
+            data.error || "Email verification failed."
+          );
+          return;
+        }
+
+        setVerificationSuccess(true);
+        setVerificationMessage(
+          data.message || "Email verified successfully."
+        );
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        console.error("Email verification error:", error);
+
+        setVerificationSuccess(false);
+        setVerificationMessage(
+          "Could not connect to the CareerAI server. Please try again."
+        );
+      } finally {
+        if (!cancelled) {
+          setVerificationLoading(false);
+        }
+      }
+    };
+
+    verifyEmail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isVerificationPage, verificationToken]);
+
+  // ==========================================
   // LOAD INTERNSHIPS
-  // -----------------------------
+  // ==========================================
+
   const loadInternships = async () => {
     try {
       const response = await fetch(`${API}/internships/`);
@@ -53,9 +155,10 @@ function App() {
     }
   };
 
-  // -----------------------------
+  // ==========================================
   // REGISTER
-  // -----------------------------
+  // ==========================================
+
   const register = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -76,7 +179,9 @@ function App() {
         return;
       }
 
-      setMessage("Account created successfully. Please login.");
+      setMessage(
+        "Account created successfully. Please check your email (including Spam) and verify your account before logging in."
+      );
 
       setForm({
         name: "",
@@ -87,13 +192,15 @@ function App() {
 
       setPage("login");
     } catch (error) {
+      console.error(error);
       setMessage("Backend connection failed.");
     }
   };
 
-  // -----------------------------
+  // ==========================================
   // LOGIN
-  // -----------------------------
+  // ==========================================
+
   const login = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -136,13 +243,15 @@ function App() {
         loadAdminStats(data.token);
       }
     } catch (error) {
+      console.error(error);
       setMessage("Backend connection failed.");
     }
   };
 
-  // -----------------------------
+  // ==========================================
   // LOGOUT
-  // -----------------------------
+  // ==========================================
+
   const logout = () => {
     localStorage.removeItem("token");
     setToken(null);
@@ -152,9 +261,10 @@ function App() {
     setCareerResult(null);
   };
 
-  // -----------------------------
+  // ==========================================
   // ADD INTERNSHIP
-  // -----------------------------
+  // ==========================================
+
   const addInternship = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -189,13 +299,15 @@ function App() {
 
       loadInternships();
     } catch (error) {
+      console.error(error);
       setMessage("Backend connection failed.");
     }
   };
 
-  // -----------------------------
+  // ==========================================
   // DELETE INTERNSHIP
-  // -----------------------------
+  // ==========================================
+
   const deleteInternship = async (id) => {
     try {
       const response = await fetch(`${API}/internships/${id}`, {
@@ -210,13 +322,15 @@ function App() {
         loadInternships();
       }
     } catch (error) {
+      console.error(error);
       setMessage("Could not delete internship.");
     }
   };
 
-  // -----------------------------
+  // ==========================================
   // AI ASSISTANT
-  // -----------------------------
+  // ==========================================
+
   const askCareerAI = async () => {
     if (!aiQuestion.trim()) return;
 
@@ -242,17 +356,21 @@ function App() {
         return;
       }
 
-      setAiAnswer(data.answer || data.response || "No answer received.");
+      setAiAnswer(
+        data.answer || data.response || "No answer received."
+      );
     } catch (error) {
+      console.error(error);
       setAiAnswer("Could not connect to CareerAI.");
     } finally {
       setAiLoading(false);
     }
   };
 
-  // -----------------------------
+  // ==========================================
   // CAREER RECOMMENDATION
-  // -----------------------------
+  // ==========================================
+
   const getCareerRecommendation = async () => {
     if (!careerQuestion.trim()) return;
 
@@ -283,15 +401,17 @@ function App() {
 
       setCareerResult(data);
     } catch (error) {
+      console.error(error);
       setMessage("Could not connect to CareerAI.");
     } finally {
       setCareerLoading(false);
     }
   };
 
-  // -----------------------------
+  // ==========================================
   // ADMIN STATS
-  // -----------------------------
+  // ==========================================
+
   const loadAdminStats = async (authToken = token) => {
     try {
       const response = await fetch(`${API}/admin/stats`, {
@@ -310,15 +430,136 @@ function App() {
     }
   };
 
+  // ==========================================
+  // LOAD INTERNSHIPS WHEN LOGGED IN
+  // ==========================================
+
   useEffect(() => {
-    if (token) {
+    if (token && !isVerificationPage) {
       loadInternships();
     }
-  }, [token]);
+  }, [token, isVerificationPage]);
 
-  // -----------------------------
+  // ==========================================
+  // EMAIL VERIFICATION SCREEN
+  // ==========================================
+
+  if (isVerificationPage) {
+    return (
+      <div className="auth-page">
+        <div className="auth-glow glow-one"></div>
+        <div className="auth-glow glow-two"></div>
+
+        <div className="auth-brand">
+          <div className="brand-symbol">✦</div>
+
+          <span>
+            Career<span>AI</span>
+          </span>
+        </div>
+
+        <div className="auth-layout">
+          <div className="auth-intro">
+            <div className="mini-badge">
+              <span className="pulse-dot"></span>
+              EMAIL VERIFICATION
+            </div>
+
+            <h1>
+              Verify your
+              <br />
+              <span>CareerAI account.</span>
+            </h1>
+
+            <p>
+              Confirm your email address to activate your CareerAI
+              account and access personalized career guidance.
+            </p>
+
+            <div className="intro-features">
+              <div>
+                <strong>01</strong>
+                <span>Secure Account</span>
+              </div>
+
+              <div>
+                <strong>02</strong>
+                <span>Verified Email</span>
+              </div>
+
+              <div>
+                <strong>03</strong>
+                <span>Access CareerAI</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="auth-card">
+            <div className="auth-card-top">
+              <div>
+                <span className="eyebrow">
+                  {verificationLoading
+                    ? "VERIFYING ACCOUNT"
+                    : verificationSuccess
+                    ? "VERIFICATION COMPLETE"
+                    : "VERIFICATION FAILED"}
+                </span>
+
+                <h2>
+                  {verificationLoading
+                    ? "Please wait..."
+                    : verificationSuccess
+                    ? "Email verified!"
+                    : "Verification failed"}
+                </h2>
+              </div>
+
+              <div className="auth-orb">
+                {verificationLoading
+                  ? "✦"
+                  : verificationSuccess
+                  ? "✓"
+                  : "!"}
+              </div>
+            </div>
+
+            <div className="message-box">
+              {verificationMessage}
+            </div>
+
+            {verificationSuccess && (
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => {
+                  window.location.href = "/";
+                }}
+              >
+                Go to CareerAI <span>→</span>
+              </button>
+            )}
+
+            {!verificationSuccess && !verificationLoading && (
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => {
+                  window.location.href = "/";
+                }}
+              >
+                Back to CareerAI <span>→</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
   // AUTH SCREEN
-  // -----------------------------
+  // ==========================================
+
   if (!user) {
     return (
       <div className="auth-page">
@@ -327,7 +568,10 @@ function App() {
 
         <div className="auth-brand">
           <div className="brand-symbol">✦</div>
-          <span>Career<span>AI</span></span>
+
+          <span>
+            Career<span>AI</span>
+          </span>
         </div>
 
         <div className="auth-layout">
@@ -344,8 +588,9 @@ function App() {
             </h1>
 
             <p>
-              Discover internships, understand your skills and build a
-              smarter career path with your personal AI career assistant.
+              Discover internships, understand your skills and build
+              a smarter career path with your personal AI career
+              assistant.
             </p>
 
             <div className="intro-features">
@@ -370,7 +615,9 @@ function App() {
             <div className="auth-card-top">
               <div>
                 <span className="eyebrow">
-                  {page === "login" ? "WELCOME BACK" : "GET STARTED"}
+                  {page === "login"
+                    ? "WELCOME BACK"
+                    : "GET STARTED"}
                 </span>
 
                 <h2>
@@ -392,33 +639,45 @@ function App() {
             {page === "login" ? (
               <form onSubmit={login}>
                 <label>Email</label>
+
                 <input
                   type="email"
                   placeholder="you@example.com"
                   value={form.email}
                   onChange={(e) =>
-                    setForm({ ...form, email: e.target.value })
+                    setForm({
+                      ...form,
+                      email: e.target.value,
+                    })
                   }
                   required
                 />
 
                 <label>Password</label>
+
                 <input
                   type="password"
                   placeholder="••••••••"
                   value={form.password}
                   onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
+                    setForm({
+                      ...form,
+                      password: e.target.value,
+                    })
                   }
                   required
                 />
 
-                <button className="primary-button" type="submit">
+                <button
+                  className="primary-button"
+                  type="submit"
+                >
                   Enter CareerAI <span>→</span>
                 </button>
 
                 <p className="switch-text">
                   Don't have an account?
+
                   <button
                     type="button"
                     onClick={() => {
@@ -433,34 +692,46 @@ function App() {
             ) : (
               <form onSubmit={register}>
                 <label>Full Name</label>
+
                 <input
                   type="text"
                   placeholder="Your full name"
                   value={form.name}
                   onChange={(e) =>
-                    setForm({ ...form, name: e.target.value })
+                    setForm({
+                      ...form,
+                      name: e.target.value,
+                    })
                   }
                   required
                 />
 
                 <label>Email</label>
+
                 <input
                   type="email"
                   placeholder="you@example.com"
                   value={form.email}
                   onChange={(e) =>
-                    setForm({ ...form, email: e.target.value })
+                    setForm({
+                      ...form,
+                      email: e.target.value,
+                    })
                   }
                   required
                 />
 
                 <label>Password</label>
+
                 <input
                   type="password"
                   placeholder="Minimum 6 characters"
                   value={form.password}
                   onChange={(e) =>
-                    setForm({ ...form, password: e.target.value })
+                    setForm({
+                      ...form,
+                      password: e.target.value,
+                    })
                   }
                   required
                 />
@@ -471,10 +742,15 @@ function App() {
                   <button
                     type="button"
                     className={
-                      form.role === "student" ? "role active" : "role"
+                      form.role === "student"
+                        ? "role active"
+                        : "role"
                     }
                     onClick={() =>
-                      setForm({ ...form, role: "student" })
+                      setForm({
+                        ...form,
+                        role: "student",
+                      })
                     }
                   >
                     🎓 Student
@@ -483,22 +759,31 @@ function App() {
                   <button
                     type="button"
                     className={
-                      form.role === "company" ? "role active" : "role"
+                      form.role === "company"
+                        ? "role active"
+                        : "role"
                     }
                     onClick={() =>
-                      setForm({ ...form, role: "company" })
+                      setForm({
+                        ...form,
+                        role: "company",
+                      })
                     }
                   >
                     🏢 Company
                   </button>
                 </div>
 
-                <button className="primary-button" type="submit">
+                <button
+                  className="primary-button"
+                  type="submit"
+                >
                   Create Account <span>→</span>
                 </button>
 
                 <p className="switch-text">
                   Already have an account?
+
                   <button
                     type="button"
                     onClick={() => {
@@ -517,15 +802,19 @@ function App() {
     );
   }
 
-  // -----------------------------
+  // ==========================================
   // DASHBOARD
-  // -----------------------------
+  // ==========================================
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-logo">
           <div className="brand-symbol small">✦</div>
-          <span>Career<span>AI</span></span>
+
+          <span>
+            Career<span>AI</span>
+          </span>
         </div>
 
         <div className="sidebar-profile">
@@ -581,13 +870,17 @@ function App() {
         <div className="sidebar-bottom">
           <div className="ai-status">
             <span className="pulse-dot"></span>
+
             <div>
               <strong>AI Online</strong>
               <small>Qwen local model</small>
             </div>
           </div>
 
-          <button className="logout-button" onClick={logout}>
+          <button
+            className="logout-button"
+            onClick={logout}
+          >
             ↪ Logout
           </button>
         </div>
@@ -596,10 +889,13 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <div>
-            <span className="eyebrow">CAREER COMMAND CENTER</span>
+            <span className="eyebrow">
+              CAREER COMMAND CENTER
+            </span>
+
             <h1>
               Good to see you,{" "}
-              <span>{user.name?.split(" ")[0]}</span>.
+              <span>{user.name?.split(" ")[0]}.</span>
             </h1>
           </div>
 
@@ -622,6 +918,7 @@ function App() {
         )}
 
         {/* HERO */}
+
         <section className="dashboard-hero">
           <div className="hero-content">
             <div className="mini-badge">
@@ -636,8 +933,8 @@ function App() {
             </h2>
 
             <p>
-              Explore opportunities, ask your AI assistant and discover
-              the skills you should build next.
+              Explore opportunities, ask your AI assistant and
+              discover the skills you should build next.
             </p>
 
             <div className="hero-actions">
@@ -645,7 +942,9 @@ function App() {
                 onClick={() =>
                   document
                     .getElementById("ai-section")
-                    ?.scrollIntoView({ behavior: "smooth" })
+                    ?.scrollIntoView({
+                      behavior: "smooth",
+                    })
                 }
                 className="hero-button"
               >
@@ -656,7 +955,9 @@ function App() {
                 onClick={() =>
                   document
                     .getElementById("internships")
-                    ?.scrollIntoView({ behavior: "smooth" })
+                    ?.scrollIntoView({
+                      behavior: "smooth",
+                    })
                 }
                 className="hero-secondary"
               >
@@ -685,9 +986,11 @@ function App() {
         </section>
 
         {/* QUICK STATS */}
+
         <section className="stats-grid">
           <div className="stat-card">
             <div className="stat-icon purple">◈</div>
+
             <div>
               <small>OPPORTUNITIES</small>
               <strong>{internships.length}</strong>
@@ -697,6 +1000,7 @@ function App() {
 
           <div className="stat-card">
             <div className="stat-icon green">✦</div>
+
             <div>
               <small>AI STATUS</small>
               <strong>Ready</strong>
@@ -706,33 +1010,49 @@ function App() {
 
           <div className="stat-card">
             <div className="stat-icon purple">◎</div>
+
             <div>
               <small>YOUR ROLE</small>
+
               <strong>
                 {user.role.charAt(0).toUpperCase() +
                   user.role.slice(1)}
               </strong>
+
               <p>Active account</p>
             </div>
           </div>
         </section>
 
         {/* STUDENT AI */}
+
         {user.role === "student" && (
           <>
-            <section id="ai-section" className="section-block">
+            <section
+              id="ai-section"
+              className="section-block"
+            >
               <div className="section-heading">
                 <div>
-                  <span className="eyebrow">YOUR AI CAREER ASSISTANT</span>
-                  <h2>Ask anything about your career.</h2>
+                  <span className="eyebrow">
+                    YOUR AI CAREER ASSISTANT
+                  </span>
+
+                  <h2>
+                    Ask anything about your career.
+                  </h2>
                 </div>
 
-                <div className="section-number">01</div>
+                <div className="section-number">
+                  01
+                </div>
               </div>
 
               <div className="ai-panel">
                 <div className="ai-panel-left">
-                  <div className="large-ai-icon">✦</div>
+                  <div className="large-ai-icon">
+                    ✦
+                  </div>
 
                   <h3>
                     Meet your
@@ -741,8 +1061,9 @@ function App() {
                   </h3>
 
                   <p>
-                    Ask about technologies, projects, internships,
-                    interview preparation or career paths.
+                    Ask about technologies, projects,
+                    internships, interview preparation or
+                    career paths.
                   </p>
 
                   <div className="ai-tags">
@@ -754,21 +1075,31 @@ function App() {
 
                 <div className="ai-chat">
                   <div className="chat-message ai">
-                    <div className="chat-avatar">✦</div>
+                    <div className="chat-avatar">
+                      ✦
+                    </div>
+
                     <div>
                       <small>CareerAI</small>
+
                       <p>
-                        Hi {user.name?.split(" ")[0]}! What would you
-                        like to work on today?
+                        Hi{" "}
+                        {user.name?.split(" ")[0]}!
+                        What would you like to work on
+                        today?
                       </p>
                     </div>
                   </div>
 
                   {aiAnswer && (
                     <div className="chat-message ai answer">
-                      <div className="chat-avatar">✦</div>
+                      <div className="chat-avatar">
+                        ✦
+                      </div>
+
                       <div>
                         <small>CareerAI</small>
+
                         <p>{aiAnswer}</p>
                       </div>
                     </div>
@@ -783,7 +1114,9 @@ function App() {
                         setAiQuestion(e.target.value)
                       }
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") askCareerAI();
+                        if (e.key === "Enter") {
+                          askCareerAI();
+                        }
                       }}
                     />
 
@@ -806,24 +1139,38 @@ function App() {
             </section>
 
             {/* CAREER RECOMMENDATION */}
+
             <section className="section-block">
               <div className="section-heading">
                 <div>
-                  <span className="eyebrow">SMART CAREER PATH</span>
-                  <h2>Discover what you should do next.</h2>
+                  <span className="eyebrow">
+                    SMART CAREER PATH
+                  </span>
+
+                  <h2>
+                    Discover what you should do next.
+                  </h2>
                 </div>
 
-                <div className="section-number">02</div>
+                <div className="section-number">
+                  02
+                </div>
               </div>
 
               <div className="recommendation-panel">
                 <div className="recommendation-input">
-                  <div className="recommendation-icon">◎</div>
+                  <div className="recommendation-icon">
+                    ◎
+                  </div>
 
                   <div className="recommendation-copy">
-                    <h3>Tell CareerAI about your skills.</h3>
+                    <h3>
+                      Tell CareerAI about your skills.
+                    </h3>
+
                     <p>
-                      Example: "I know Python, Flask, React and SQL."
+                      Example: "I know Python, Flask,
+                      React and SQL."
                     </p>
                   </div>
 
@@ -831,7 +1178,9 @@ function App() {
                     placeholder="Describe your current skills, interests or career goal..."
                     value={careerQuestion}
                     onChange={(e) =>
-                      setCareerQuestion(e.target.value)
+                      setCareerQuestion(
+                        e.target.value
+                      )
                     }
                   />
 
@@ -853,21 +1202,30 @@ function App() {
                         <span className="eyebrow">
                           AI ANALYSIS COMPLETE
                         </span>
-                        <h3>Your recommended direction</h3>
+
+                        <h3>
+                          Your recommended direction
+                        </h3>
                       </div>
 
-                      <div className="success-icon">✓</div>
+                      <div className="success-icon">
+                        ✓
+                      </div>
                     </div>
 
                     <div className="skills-result">
                       <span>Detected Skills</span>
+
                       <strong>
                         {careerResult.skills}
                       </strong>
                     </div>
 
                     <div className="recommendation-text">
-                      <span>CAREER RECOMMENDATION</span>
+                      <span>
+                        CAREER RECOMMENDATION
+                      </span>
+
                       <p>
                         {careerResult.recommendation}
                       </p>
@@ -880,11 +1238,15 @@ function App() {
         )}
 
         {/* COMPANY */}
+
         {user.role === "company" && (
           <section className="section-block">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">COMPANY WORKSPACE</span>
+                <span className="eyebrow">
+                  COMPANY WORKSPACE
+                </span>
+
                 <h2>Find your next intern.</h2>
               </div>
             </div>
@@ -895,9 +1257,10 @@ function App() {
                 onSubmit={addInternship}
               >
                 <h3>Publish an internship</h3>
+
                 <p>
-                  Create an opportunity and connect with talented
-                  students.
+                  Create an opportunity and connect with
+                  talented students.
                 </p>
 
                 <input
@@ -969,7 +1332,10 @@ function App() {
                   }
                 />
 
-                <button className="green-button" type="submit">
+                <button
+                  className="green-button"
+                  type="submit"
+                >
                   Publish Internship →
                 </button>
               </form>
@@ -978,11 +1344,15 @@ function App() {
         )}
 
         {/* ADMIN */}
+
         {user.role === "admin" && (
           <section className="section-block">
             <div className="section-heading">
               <div>
-                <span className="eyebrow">ADMIN CONTROL CENTER</span>
+                <span className="eyebrow">
+                  ADMIN CONTROL CENTER
+                </span>
+
                 <h2>Platform overview.</h2>
               </div>
             </div>
@@ -990,58 +1360,81 @@ function App() {
             <div className="admin-grid">
               <div className="admin-stat">
                 <span>USERS</span>
+
                 <strong>
                   {adminStats?.total_users ?? "—"}
                 </strong>
+
                 <small>Total registered users</small>
               </div>
 
               <div className="admin-stat">
                 <span>STUDENTS</span>
+
                 <strong>
                   {adminStats?.students ?? "—"}
                 </strong>
+
                 <small>Student accounts</small>
               </div>
 
               <div className="admin-stat">
                 <span>COMPANIES</span>
+
                 <strong>
                   {adminStats?.companies ?? "—"}
                 </strong>
+
                 <small>Company accounts</small>
               </div>
 
               <div className="admin-stat green-admin">
                 <span>INTERNSHIPS</span>
+
                 <strong>
                   {adminStats?.total_internships ??
                     internships.length}
                 </strong>
-                <small>Published opportunities</small>
+
+                <small>
+                  Published opportunities
+                </small>
               </div>
             </div>
           </section>
         )}
 
         {/* INTERNSHIPS */}
-        <section id="internships" className="section-block">
+
+        <section
+          id="internships"
+          className="section-block"
+        >
           <div className="section-heading">
             <div>
-              <span className="eyebrow">OPPORTUNITY BOARD</span>
-              <h2>Internships worth exploring.</h2>
+              <span className="eyebrow">
+                OPPORTUNITY BOARD
+              </span>
+
+              <h2>
+                Internships worth exploring.
+              </h2>
             </div>
 
-            <div className="section-number">03</div>
+            <div className="section-number">
+              03
+            </div>
           </div>
 
           {internships.length === 0 ? (
             <div className="empty-state">
               <div>◈</div>
+
               <h3>No internships yet</h3>
+
               <p>
-                New opportunities will appear here when companies
-                publish them.
+                New opportunities will appear here when
+                companies publish them.
               </p>
             </div>
           ) : (
@@ -1082,12 +1475,20 @@ function App() {
                   </div>
 
                   <div className="internship-meta">
-                    <span>⌖ {internship.location || "Remote"}</span>
                     <span>
-                      ◷ {internship.duration || "Flexible"}
+                      ⌖ {internship.location || "Remote"}
                     </span>
+
                     <span>
-                      ₨ {internship.stipend || "Not specified"}
+                      ◷{" "}
+                      {internship.duration ||
+                        "Flexible"}
+                    </span>
+
+                    <span>
+                      ₨{" "}
+                      {internship.stipend ||
+                        "Not specified"}
                     </span>
                   </div>
 
@@ -1096,7 +1497,9 @@ function App() {
                     <button
                       className="delete-button"
                       onClick={() =>
-                        deleteInternship(internship.id)
+                        deleteInternship(
+                          internship.id
+                        )
                       }
                     >
                       Remove internship
@@ -1125,4 +1528,3 @@ function App() {
 }
 
 export default App;
-
