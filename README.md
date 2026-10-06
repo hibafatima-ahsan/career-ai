@@ -187,29 +187,25 @@ CareerAI follows a layered full-stack architecture.
 │                                           │
 │ Users │ Profiles │ Internships            │
 └───────────────────────────────────────────┘
-🛠️ Technology Stack
-Layer	Technology	Purpose
-Frontend	React	User interface
-Frontend Build Tool	Vite	Frontend development and build
-Programming Language	JavaScript	Frontend logic
-Styling	CSS	Responsive user interface
-Backend	Python	Server-side development
-Web Framework	Flask	REST API development
-Database	Supabase PostgreSQL	Data storage
-Authentication	JWT	Secure authentication
-Password Security	bcrypt	Password hashing
-Authorization	RBAC	Role-based access control
-AI Runtime	Ollama	Local AI model execution
-AI Model	Qwen 2.5	AI response generation
-AI Framework	LangChain	AI model integration
-Agent Workflow	LangGraph	AI workflow orchestration
-API	REST API	Frontend/backend communication
-Testing	Pytest	Automated backend testing
-Version Control	Git	Source control
-Repository	GitHub	Code hosting
-CI	GitHub Actions	Automated testing
-Backend Deployment	PythonAnywhere	Flask deployment
-Frontend Deployment	Vercel	React deployment
+ # 🛠️ Technology Stack
+
+- **Frontend:** React, Vite, JavaScript, CSS
+- **Backend:** Python, Flask
+- **Database:** Supabase PostgreSQL
+- **Authentication:** JWT
+- **Password Security:** bcrypt
+- **Authorization:** Role-Based Access Control (RBAC)
+- **AI Runtime:** Ollama
+- **AI Model:** Qwen 2.5
+- **AI Framework:** LangChain
+- **Agent Workflow:** LangGraph
+- **API Communication:** REST API
+- **Testing:** Pytest
+- **Version Control:** Git
+- **Code Hosting:** GitHub
+- **CI/CD:** GitHub Actions
+- **Backend Deployment:** PythonAnywhere
+- **Frontend Deployment:** Vercel
 👥 User Roles
 
 CareerAI supports three major user roles.
