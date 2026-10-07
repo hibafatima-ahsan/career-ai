@@ -7,7 +7,16 @@ from routes.ai import ai_bp
 from routes.chat import chat_bp
 from routes.admin import admin_bp
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": [
+                "https://career-ai-nu-six.vercel.app"
+            ]
+        }
+    }
+)
 app.register_blueprint(auth_bp, url_prefix="/api/auth")
 app.register_blueprint(
     internships_bp,
