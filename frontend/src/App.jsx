@@ -1,14 +1,122 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./App.css";
 
 const API = "https://hibafatima.pythonanywhere.com/api";
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
+const formatAIResponse = (text = "") => {
+  return text
+    .replace(/\r\n/g, "\n")
+    .replace(/^\s*\*\*([^*\n]+)\*\*\s*$/gm, "### $1")
+    .trim();
+};
+
+const formatDate = (date) => {
+  if (!date) return "";
+
+  try {
+    return new Date(date).toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return "";
+  }
+};
+
+/* =========================================================
+   MARKDOWN COMPONENTS
+========================================================= */
+
+const markdownComponents = {
+  h1: ({ children }) => (
+    <h3 className="ai-md-heading">{children}</h3>
+  ),
+
+  h2: ({ children }) => (
+    <h3 className="ai-md-heading">{children}</h3>
+  ),
+
+  h3: ({ children }) => (
+    <h4 className="ai-md-subheading">{children}</h4>
+  ),
+
+  p: ({ children }) => (
+    <p className="ai-md-paragraph">{children}</p>
+  ),
+
+  ul: ({ children }) => (
+    <ul className="ai-md-list">{children}</ul>
+  ),
+
+  ol: ({ children }) => (
+    <ol className="ai-md-list">{children}</ol>
+  ),
+
+  li: ({ children }) => (
+    <li className="ai-md-list-item">{children}</li>
+  ),
+
+  strong: ({ children }) => (
+    <strong className="ai-md-bold">{children}</strong>
+  ),
+
+  blockquote: ({ children }) => (
+    <blockquote className="ai-md-quote">{children}</blockquote>
+  ),
+
+  code: ({ inline, children }) =>
+    inline ? (
+      <code className="ai-inline-code">{children}</code>
+    ) : (
+      <pre className="ai-code-block">
+        <code>{children}</code>
+      </pre>
+    ),
+
+  table: ({ children }) => (
+    <div className="ai-table-wrapper">
+      <table className="ai-table">{children}</table>
+    </div>
+  ),
+
+  th: ({ children }) => (
+    <th className="ai-table-header">{children}</th>
+  ),
+
+  td: ({ children }) => (
+    <td className="ai-table-cell">{children}</td>
+  ),
+
+  a: ({ href, children }) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="ai-link"
+    >
+      {children}
+    </a>
+  ),
+};
+
+/* =========================================================
+   APP
+========================================================= */
+
 function App() {
-  const [page, setPage] = useState("login");
+  /* =======================================================
+     AUTH / GENERAL STATE
+  ======================================================= */
+
+  const [page, setPage] = useState("auth");
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [token, setToken] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -17,20 +125,37 @@ function App() {
     role: "student",
   });
 
+  const [message, setMessage] = useState("");
+  const [isRegister, setIsRegister] = useState(false);
+
+  /* =======================================================
+     NAVIGATION / PROFILE
+  ======================================================= */
+
+  const [activeSection, setActiveSection] = useState("dashboard");
+  const [showProfile, setShowProfile] = useState(false);
+
+  /* =======================================================
+     INTERNSHIPS
+  ======================================================= */
+
   const [internships, setInternships] = useState([]);
 
   const [internshipForm, setInternshipForm] = useState({
+    company_name: "",
     title: "",
-    description: "",
-    skills: "",
     location: "",
-    stipend: "",
+    description: "",
+    requirements: "",
+    skills: "",
     duration: "",
+    stipend: "",
+    deadline: "",
   });
 
-  // ==========================================
-  // AI CHAT
-  // ==========================================
+  /* =======================================================
+     AI CHAT
+  ======================================================= */
 
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("");
@@ -42,169 +167,87 @@ function App() {
   const [chatMessages, setChatMessages] = useState([]);
 
   const [conversations, setConversations] = useState([]);
-
-  const [chatSidebarOpen, setChatSidebarOpen] = useState(true);
-
-  const [conversationsLoading, setConversationsLoading] =
+  const [chatListLoading, setChatListLoading] = useState(false);
+  const [conversationLoading, setConversationLoading] =
     useState(false);
 
-  // ==========================================
-  // CAREER RECOMMENDATION
-  // ==========================================
+  /* =======================================================
+     CAREER RECOMMENDATION
+  ======================================================= */
 
   const [careerQuestion, setCareerQuestion] = useState("");
   const [careerResult, setCareerResult] = useState(null);
   const [careerLoading, setCareerLoading] = useState(false);
 
-  const [message, setMessage] = useState("");
+  /* =======================================================
+     ADMIN
+  ======================================================= */
 
-  const [adminStats, setAdminStats] = useState(null);
+  const [adminStats, setAdminStats] = useState({
+    users: 0,
+    internships: 0,
+  });
 
-  // ==========================================
-  // EMAIL VERIFICATION
-  // ==========================================
+  /* =======================================================
+     EMAIL VERIFICATION
+  ======================================================= */
 
-  const currentPath = window.location.pathname;
-
-  const verificationToken = new URLSearchParams(
-    window.location.search
-  ).get("token");
-
-  const isVerificationPage =
-    currentPath === "/verify-email" ||
-    Boolean(verificationToken);
-
-  const [verificationMessage, setVerificationMessage] =
-    useState("Verifying your email...");
-
-  const [verificationSuccess, setVerificationSuccess] =
+  const [isVerificationPage, setIsVerificationPage] =
     useState(false);
 
-  const [verificationLoading, setVerificationLoading] =
-    useState(isVerificationPage);
+  const [verificationStatus, setVerificationStatus] =
+    useState("loading");
 
-  // ==========================================
-  // EMAIL VERIFICATION EFFECT
-  // ==========================================
+  const [verificationMessage, setVerificationMessage] =
+    useState("");
 
-  useEffect(() => {
-    if (!isVerificationPage) {
-      return;
-    }
+  /* =======================================================
+     SECTION NAVIGATION
+  ======================================================= */
 
-    if (!verificationToken) {
-      setVerificationLoading(false);
-      setVerificationSuccess(false);
-      setVerificationMessage(
-        "Verification token is missing. Please use the verification link sent to your email."
-      );
-      return;
-    }
+  const scrollToSection = (sectionId, sectionName) => {
+    setActiveSection(sectionName);
 
-    let cancelled = false;
+    setTimeout(() => {
+      const element = document.getElementById(sectionId);
 
-    const verifyEmail = async () => {
-      try {
-        setVerificationLoading(true);
-        setVerificationMessage("Verifying your email...");
-        setVerificationSuccess(false);
-
-        const verificationUrl =
-          `${API}/auth/verify-email?token=${encodeURIComponent(
-            verificationToken
-          )}`;
-
-        const response = await fetch(verificationUrl, {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
+      if (element) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
         });
-
-        const data = await response.json();
-
-        if (cancelled) {
-          return;
-        }
-
-        if (!response.ok) {
-          setVerificationSuccess(false);
-          setVerificationMessage(
-            data.error || "Email verification failed."
-          );
-          return;
-        }
-
-        setVerificationSuccess(true);
-        setVerificationMessage(
-          data.message ||
-            "Email verified successfully."
-        );
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error(
-          "Email verification error:",
-          error
-        );
-
-        setVerificationSuccess(false);
-        setVerificationMessage(
-          "Could not connect to the CareerAI server. Please try again."
-        );
-      } finally {
-        if (!cancelled) {
-          setVerificationLoading(false);
-        }
       }
-    };
+    }, 50);
+  };
 
-    verifyEmail();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isVerificationPage, verificationToken]);
-
-  // ==========================================
-  // LOAD INTERNSHIPS
-  // ==========================================
+  /* =======================================================
+     INTERNSHIPS
+  ======================================================= */
 
   const loadInternships = async () => {
     try {
-      const response = await fetch(
-        `${API}/internships/`
-      );
+      const response = await fetch(`${API}/internships`);
 
       const data = await response.json();
 
       if (response.ok) {
-        setInternships(data);
+        setInternships(Array.isArray(data) ? data : []);
       }
     } catch (error) {
-      console.error(
-        "Internship loading error:",
-        error
-      );
+      console.error("Internship loading error:", error);
     }
   };
 
-  // ==========================================
-  // LOAD ALL CONVERSATIONS
-  // ==========================================
+  /* =======================================================
+     CHAT: LOAD ALL CONVERSATIONS
+  ======================================================= */
 
-  const loadConversations = async (
-    authToken = token
-  ) => {
-    if (!authToken) {
-      return;
-    }
+  const loadConversations = async (authToken = token) => {
+    if (!authToken) return [];
+
+    setChatListLoading(true);
 
     try {
-      setConversationsLoading(true);
-
       const response = await fetch(
         `${API}/chat/conversations`,
         {
@@ -217,35 +260,34 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error(
-          "Could not load conversations:",
-          data
-        );
-        return;
+        console.error("Conversation loading failed:", data);
+        return [];
       }
 
-      setConversations(data || []);
+      const list = Array.isArray(data) ? data : [];
+
+      setConversations(list);
+
+      return list;
     } catch (error) {
-      console.error(
-        "Conversation loading error:",
-        error
-      );
+      console.error("Conversation loading error:", error);
+      return [];
     } finally {
-      setConversationsLoading(false);
+      setChatListLoading(false);
     }
   };
 
-  // ==========================================
-  // LOAD ONE CONVERSATION
-  // ==========================================
+  /* =======================================================
+     CHAT: LOAD SINGLE CONVERSATION
+  ======================================================= */
 
-  const loadConversation = async (
+  const loadConversationMessages = async (
     conversationId,
     authToken = token
   ) => {
-    if (!authToken || !conversationId) {
-      return;
-    }
+    if (!conversationId || !authToken) return;
+
+    setConversationLoading(true);
 
     try {
       const response = await fetch(
@@ -260,148 +302,92 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error(
-          "Could not load conversation messages:",
-          data
-        );
+        console.error("Messages loading failed:", data);
         return;
       }
 
       setCurrentConversationId(conversationId);
-
-      setChatMessages(
-        (data || []).map((item) => ({
-          role: item.role,
-          content: item.content,
-        }))
-      );
-
+      setChatMessages(Array.isArray(data) ? data : []);
       setAiAnswer("");
-
-      // On smaller screens close sidebar after selecting chat
-      if (window.innerWidth < 900) {
-        setChatSidebarOpen(false);
-      }
     } catch (error) {
-      console.error(
-        "Conversation loading error:",
-        error
-      );
+      console.error("Messages loading error:", error);
+    } finally {
+      setConversationLoading(false);
     }
   };
 
-  // ==========================================
-  // LOAD LATEST CHAT
-  // ==========================================
+  /* =======================================================
+     CHAT: LOAD LATEST CHAT
+  ======================================================= */
 
-  const loadLatestChat = async (
-    authToken = token
-  ) => {
-    if (!authToken) {
+  const loadLatestChat = async (authToken = token) => {
+    const list = await loadConversations(authToken);
+
+    if (!list.length) {
+      setCurrentConversationId(null);
+      setChatMessages([]);
       return;
     }
 
-    try {
-      setConversationsLoading(true);
+    const latest = list[0];
 
-      const conversationResponse =
-        await fetch(
-          `${API}/chat/conversations`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${authToken}`,
-            },
-          }
-        );
-
-      const conversations =
-        await conversationResponse.json();
-
-      if (!conversationResponse.ok) {
-        console.error(
-          "Could not load conversations:",
-          conversations
-        );
-        return;
-      }
-
-      setConversations(
-        conversations || []
-      );
-
-      if (!conversations.length) {
-        setCurrentConversationId(null);
-        setChatMessages([]);
-        return;
-      }
-
-      const latestConversation =
-        conversations[0];
-
-      setCurrentConversationId(
-        latestConversation.id
-      );
-
-      const messagesResponse =
-        await fetch(
-          `${API}/chat/conversations/${latestConversation.id}/messages`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${authToken}`,
-            },
-          }
-        );
-
-      const messages =
-        await messagesResponse.json();
-
-      if (!messagesResponse.ok) {
-        console.error(
-          "Could not load chat messages:",
-          messages
-        );
-        return;
-      }
-
-      setChatMessages(
-        (messages || []).map((item) => ({
-          role: item.role,
-          content: item.content,
-        }))
-      );
-    } catch (error) {
-      console.error(
-        "Chat loading error:",
-        error
-      );
-    } finally {
-      setConversationsLoading(false);
-    }
+    await loadConversationMessages(latest.id, authToken);
   };
 
-  // ==========================================
-  // START NEW CHAT
-  // ==========================================
+  /* =======================================================
+     CHAT: NEW CHAT
+  ======================================================= */
 
   const startNewChat = () => {
     setCurrentConversationId(null);
     setChatMessages([]);
     setAiQuestion("");
     setAiAnswer("");
+
+    scrollToSection("ai-section", "career");
   };
 
-  // ==========================================
-  // DELETE CONVERSATION
-  // ==========================================
+  /* =======================================================
+     CHAT: SELECT CHAT
+  ======================================================= */
+
+  const selectConversation = async (conversationId) => {
+    setActiveSection("career");
+
+    await loadConversationMessages(
+      conversationId,
+      token
+    );
+
+    setTimeout(() => {
+      const element = document.getElementById("ai-section");
+
+      if (element) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }, 50);
+  };
+
+  /* =======================================================
+     CHAT: DELETE CHAT
+  ======================================================= */
 
   const deleteConversation = async (
-    conversationId
+    conversationId,
+    event
   ) => {
-    if (!token) {
-      return;
-    }
+    event?.stopPropagation();
+
+    if (!token || !conversationId) return;
+
+    const confirmed = window.confirm(
+      "Delete this conversation?"
+    );
+
+    if (!confirmed) return;
 
     try {
       const response = await fetch(
@@ -409,8 +395,7 @@ function App() {
         {
           method: "DELETE",
           headers: {
-            Authorization:
-              `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
@@ -418,41 +403,46 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        console.error(
-          "Delete conversation error:",
-          data
+        setMessage(
+          data.error || "Could not delete conversation"
         );
         return;
       }
 
-      setConversations((prev) =>
-        prev.filter(
-          (conversation) =>
-            conversation.id !==
-            conversationId
-        )
+      const remaining = conversations.filter(
+        (conversation) =>
+          conversation.id !== conversationId
       );
 
-      if (
-        currentConversationId ===
-        conversationId
-      ) {
-        startNewChat();
+      setConversations(remaining);
+
+      if (currentConversationId === conversationId) {
+        if (remaining.length > 0) {
+          await loadConversationMessages(
+            remaining[0].id,
+            token
+          );
+        } else {
+          setCurrentConversationId(null);
+          setChatMessages([]);
+          setAiQuestion("");
+          setAiAnswer("");
+        }
       }
     } catch (error) {
-      console.error(
-        "Could not delete conversation:",
-        error
-      );
+      console.error("Delete conversation error:", error);
+
+      setMessage("Could not delete conversation");
     }
   };
 
-  // ==========================================
-  // REGISTER
-  // ==========================================
+  /* =======================================================
+     REGISTER
+  ======================================================= */
 
   const register = async (e) => {
     e.preventDefault();
+
     setMessage("");
 
     try {
@@ -461,8 +451,7 @@ function App() {
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify(form),
         }
@@ -472,14 +461,14 @@ function App() {
 
       if (!response.ok) {
         setMessage(
-          data.error ||
-            "Registration failed"
+          data.error || "Registration failed"
         );
         return;
       }
 
       setMessage(
-        "Account created successfully. Please check your email (including Spam) and verify your account before logging in."
+        data.message ||
+          "Registration successful. Please verify your email."
       );
 
       setForm({
@@ -489,21 +478,23 @@ function App() {
         role: "student",
       });
 
-      setPage("login");
+      setIsRegister(false);
     } catch (error) {
-      console.error(error);
+      console.error("Registration error:", error);
+
       setMessage(
-        "Backend connection failed."
+        "Unable to connect to the server."
       );
     }
   };
 
-  // ==========================================
-  // LOGIN
-  // ==========================================
+  /* =======================================================
+     LOGIN
+  ======================================================= */
 
   const login = async (e) => {
     e.preventDefault();
+
     setMessage("");
 
     try {
@@ -512,8 +503,7 @@ function App() {
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             email: form.email,
@@ -531,11 +521,6 @@ function App() {
         return;
       }
 
-      localStorage.setItem(
-        "token",
-        data.token
-      );
-
       setToken(data.token);
       setUser(data.user);
       setPage("dashboard");
@@ -547,67 +532,65 @@ function App() {
         role: "student",
       });
 
-      loadInternships();
+      setMessage("");
 
-      loadLatestChat(data.token);
+      await loadInternships();
 
       if (data.user.role === "admin") {
-        loadAdminStats(data.token);
+        await loadAdminStats(data.token);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Login error:", error);
+
       setMessage(
-        "Backend connection failed."
+        "Unable to connect to the server."
       );
     }
   };
 
-  // ==========================================
-  // LOGOUT
-  // ==========================================
+  /* =======================================================
+     LOGOUT
+  ======================================================= */
 
   const logout = () => {
-    localStorage.removeItem("token");
-
-    setToken(null);
+    setToken("");
     setUser(null);
-    setPage("login");
+    setPage("auth");
 
+    setChatMessages([]);
+    setConversations([]);
+    setCurrentConversationId(null);
+
+    setCareerResult(null);
     setAiAnswer("");
     setAiQuestion("");
 
-    setChatMessages([]);
-    setCurrentConversationId(null);
-    setConversations([]);
-
-    setCareerResult(null);
-    setCareerQuestion("");
-
-    setChatSidebarOpen(true);
+    setShowProfile(false);
+    setActiveSection("dashboard");
   };
 
-  // ==========================================
-  // ADD INTERNSHIP
-  // ==========================================
+  /* =======================================================
+     ADD INTERNSHIP
+  ======================================================= */
 
   const addInternship = async (e) => {
     e.preventDefault();
-    setMessage("");
+
+    if (!token) {
+      setMessage("Please login first.");
+      return;
+    }
 
     try {
       const response = await fetch(
-        `${API}/internships/`,
+        `${API}/internships`,
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
-            Authorization:
-              `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify(
-            internshipForm
-          ),
+          body: JSON.stringify(internshipForm),
         }
       );
 
@@ -615,87 +598,109 @@ function App() {
 
       if (!response.ok) {
         setMessage(
-          data.error ||
-            "Could not create internship"
+          data.error || "Could not add internship"
         );
         return;
       }
 
-      setMessage(
-        "Internship published successfully."
-      );
+      setMessage("Internship posted successfully.");
 
       setInternshipForm({
+        company_name: "",
         title: "",
-        description: "",
-        skills: "",
         location: "",
-        stipend: "",
+        description: "",
+        requirements: "",
+        skills: "",
         duration: "",
+        stipend: "",
+        deadline: "",
       });
 
-      loadInternships();
+      await loadInternships();
     } catch (error) {
-      console.error(error);
-      setMessage(
-        "Backend connection failed."
-      );
+      console.error("Add internship error:", error);
+
+      setMessage("Could not post internship.");
     }
   };
 
-  // ==========================================
-  // DELETE INTERNSHIP
-  // ==========================================
+  /* =======================================================
+     DELETE INTERNSHIP
+  ======================================================= */
 
   const deleteInternship = async (id) => {
+    if (!token) return;
+
+    const confirmed = window.confirm(
+      "Delete this internship?"
+    );
+
+    if (!confirmed) return;
+
     try {
       const response = await fetch(
         `${API}/internships/${id}`,
         {
           method: "DELETE",
           headers: {
-            Authorization:
-              `Bearer ${token}`,
+            Authorization: `Bearer ${token}`,
           },
         }
       );
 
-      if (response.ok) {
+      const data = await response.json();
+
+      if (!response.ok) {
         setMessage(
-          "Internship removed."
+          data.error || "Could not delete internship"
         );
-
-        loadInternships();
+        return;
       }
-    } catch (error) {
-      console.error(error);
 
-      setMessage(
-        "Could not delete internship."
+      setMessage("Internship deleted.");
+
+      await loadInternships();
+    } catch (error) {
+      console.error(
+        "Delete internship error:",
+        error
       );
+
+      setMessage("Could not delete internship.");
     }
   };
 
-  // ==========================================
-  // AI ASSISTANT
-  // ==========================================
+  /* =======================================================
+     ASK CAREER AI
+  ======================================================= */
 
-  const askCareerAI = async () => {
-    const question =
-      aiQuestion.trim();
+  const askCareerAI = async (e) => {
+    e?.preventDefault();
 
-    if (!question || aiLoading) {
+    const question = aiQuestion.trim();
+
+    if (!question) return;
+
+    if (!token) {
+      setMessage("Please login first.");
       return;
     }
 
     setAiLoading(true);
+    setAiAnswer("");
+    setMessage("");
+
+    const temporaryUserMessage = {
+      id: `temp-user-${Date.now()}`,
+      role: "user",
+      content: question,
+      created_at: new Date().toISOString(),
+    };
 
     setChatMessages((prev) => [
       ...prev,
-      {
-        role: "user",
-        content: question,
-      },
+      temporaryUserMessage,
     ]);
 
     setAiQuestion("");
@@ -706,1869 +711,1765 @@ function App() {
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
-            Authorization:
-              `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             question,
             conversation_id:
-              currentConversationId,
+              currentConversationId || null,
           }),
         }
       );
 
-      const data =
-        await response.json();
+      const data = await response.json();
 
       if (!response.ok) {
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content:
-              data.error ||
-              "AI request failed.",
-          },
-        ]);
-
+        setMessage(
+          data.error ||
+            "AI response could not be generated."
+        );
         return;
       }
 
-      const answer =
-        data.answer ||
-        data.response ||
-        "No answer received.";
-
-      if (data.conversation_id) {
-        setCurrentConversationId(
-          data.conversation_id
-        );
-      }
-
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: answer,
-        },
-      ]);
-
-      setAiAnswer(answer);
-
-      // Refresh sidebar so new chat appears
-      await loadConversations();
-    } catch (error) {
-      console.error(
-        "AI error:",
-        error
+      setCurrentConversationId(
+        data.conversation_id
       );
 
+      setAiAnswer(data.answer || "");
+
+      const assistantMessage = {
+        id: `temp-ai-${Date.now()}`,
+        role: "assistant",
+        content: data.answer || "",
+        created_at: new Date().toISOString(),
+      };
+
       setChatMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content:
-            "Could not connect to CareerAI.",
-        },
+        assistantMessage,
       ]);
+
+      await loadConversations(token);
+    } catch (error) {
+      console.error("AI request error:", error);
+
+      setMessage(
+        "Unable to get an AI response."
+      );
     } finally {
       setAiLoading(false);
+
+      await loadConversations(token);
     }
   };
 
-  // ==========================================
-  // CAREER RECOMMENDATION
-  // ==========================================
+  /* =======================================================
+     CAREER RECOMMENDATION
+  ======================================================= */
 
-  const getCareerRecommendation =
-    async () => {
-      if (
-        !careerQuestion.trim()
-      ) {
+  const getCareerRecommendation = async (e) => {
+    e?.preventDefault();
+
+    const question = careerQuestion.trim();
+
+    if (!question) return;
+
+    if (!token) {
+      setMessage("Please login first.");
+      return;
+    }
+
+    setCareerLoading(true);
+    setCareerResult(null);
+    setMessage("");
+
+    try {
+      const response = await fetch(
+        `${API}/ai/career-recommendation`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            question,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setMessage(
+          data.error ||
+            "Could not generate recommendation."
+        );
         return;
       }
 
-      setCareerLoading(true);
-      setCareerResult(null);
+      setCareerResult(data);
+    } catch (error) {
+      console.error(
+        "Career recommendation error:",
+        error
+      );
 
-      try {
-        const response =
-          await fetch(
-            `${API}/ai/career-recommendation`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-                Authorization:
-                  `Bearer ${token}`,
-              },
-              body: JSON.stringify({
-                question:
-                  careerQuestion,
-              }),
-            }
-          );
+      setMessage(
+        "Could not generate career recommendation."
+      );
+    } finally {
+      setCareerLoading(false);
+    }
+  };
 
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          setMessage(
-            data.error ||
-              "Recommendation failed."
-          );
-          return;
-        }
-
-        setCareerResult(data);
-      } catch (error) {
-        console.error(error);
-
-        setMessage(
-          "Could not connect to CareerAI."
-        );
-      } finally {
-        setCareerLoading(false);
-      }
-    };
-
-  // ==========================================
-  // ADMIN STATS
-  // ==========================================
+  /* =======================================================
+     ADMIN STATS
+  ======================================================= */
 
   const loadAdminStats = async (
     authToken = token
   ) => {
+    if (!authToken) return;
+
     try {
-      const response =
-        await fetch(
-          `${API}/admin/stats`,
-          {
-            headers: {
-              Authorization:
-                `Bearer ${authToken}`,
-            },
-          }
-        );
+      const usersResponse = await fetch(
+        `${API}/test-db`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
 
-      const data =
-        await response.json();
+      if (usersResponse.ok) {
+        const usersData =
+          await usersResponse.json();
 
-      if (response.ok) {
-        setAdminStats(data);
+        setAdminStats((prev) => ({
+          ...prev,
+          users: Array.isArray(usersData.users)
+            ? usersData.users.length
+            : 0,
+        }));
       }
+
+      setAdminStats((prev) => ({
+        ...prev,
+        internships: internships.length,
+      }));
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Admin stats error:",
+        error
+      );
     }
   };
 
-  // ==========================================
-  // LOAD DATA WHEN LOGGED IN
-  // ==========================================
+  /* =======================================================
+     EMAIL VERIFICATION
+  ======================================================= */
 
   useEffect(() => {
-    if (
-      token &&
-      !isVerificationPage
-    ) {
-      loadInternships();
-      loadLatestChat(token);
-    }
-  }, [token, isVerificationPage]);
+    const params = new URLSearchParams(
+      window.location.search
+    );
 
-  // ==========================================
-  // EMAIL VERIFICATION SCREEN
-  // ==========================================
+    const verificationToken =
+      params.get("token");
+
+    if (
+      window.location.pathname ===
+        "/verify-email" &&
+      verificationToken
+    ) {
+      setIsVerificationPage(true);
+
+      const verifyEmail = async () => {
+        try {
+          const response = await fetch(
+            `${API}/auth/verify-email?token=${encodeURIComponent(
+              verificationToken
+            )}`
+          );
+
+          const data = await response.json();
+
+          if (response.ok) {
+            setVerificationStatus(
+              "success"
+            );
+
+            setVerificationMessage(
+              data.message ||
+                "Email verified successfully."
+            );
+          } else {
+            setVerificationStatus(
+              "error"
+            );
+
+            setVerificationMessage(
+              data.error ||
+                "Email verification failed."
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Verification error:",
+            error
+          );
+
+          setVerificationStatus("error");
+
+          setVerificationMessage(
+            "Unable to verify email."
+          );
+        }
+      };
+
+      verifyEmail();
+    }
+  }, []);
+
+  /* =======================================================
+     LOAD DATA AFTER LOGIN
+  ======================================================= */
+
+  useEffect(() => {
+    if (!token || !user) return;
+
+    loadInternships();
+    loadLatestChat(token);
+
+    if (user.role === "admin") {
+      loadAdminStats(token);
+    }
+  }, [token, user]);
+
+  /* =======================================================
+     VERIFICATION PAGE
+  ======================================================= */
 
   if (isVerificationPage) {
     return (
-      <div className="auth-page">
-        <div className="auth-glow glow-one"></div>
-        <div className="auth-glow glow-two"></div>
-
-        <div className="auth-brand">
-          <div className="brand-symbol">
-            ✦
-          </div>
-
-          <span>
+      <div className="verification-page">
+        <div className="verification-card">
+          <div className="verification-logo">
             Career<span>AI</span>
-          </span>
-        </div>
-
-        <div className="auth-layout">
-          <div className="auth-intro">
-            <div className="mini-badge">
-              <span className="pulse-dot"></span>
-              EMAIL VERIFICATION
-            </div>
-
-            <h1>
-              Verify your
-              <br />
-              <span>
-                CareerAI account.
-              </span>
-            </h1>
-
-            <p>
-              Confirm your email address
-              to activate your CareerAI
-              account and access
-              personalized career guidance.
-            </p>
-
-            <div className="intro-features">
-              <div>
-                <strong>01</strong>
-                <span>
-                  Secure Account
-                </span>
-              </div>
-
-              <div>
-                <strong>02</strong>
-                <span>
-                  Verified Email
-                </span>
-              </div>
-
-              <div>
-                <strong>03</strong>
-                <span>
-                  Access CareerAI
-                </span>
-              </div>
-            </div>
           </div>
 
-          <div className="auth-card">
-            <div className="auth-card-top">
-              <div>
-                <span className="eyebrow">
-                  {verificationLoading
-                    ? "VERIFYING ACCOUNT"
-                    : verificationSuccess
-                    ? "VERIFICATION COMPLETE"
-                    : "VERIFICATION FAILED"}
-                </span>
-
-                <h2>
-                  {verificationLoading
-                    ? "Please wait..."
-                    : verificationSuccess
-                    ? "Email verified!"
-                    : "Verification failed"}
-                </h2>
+          {verificationStatus === "loading" && (
+            <>
+              <div className="verification-icon">
+                ⏳
               </div>
 
-              <div className="auth-orb">
-                {verificationLoading
-                  ? "✦"
-                  : verificationSuccess
-                  ? "✓"
-                  : "!"}
+              <h1>Verifying Email</h1>
+
+              <p>
+                Please wait while we verify
+                your email address.
+              </p>
+            </>
+          )}
+
+          {verificationStatus === "success" && (
+            <>
+              <div className="verification-icon success">
+                ✓
               </div>
-            </div>
 
-            <div className="message-box">
-              {verificationMessage}
-            </div>
+              <h1>Email Verified!</h1>
 
-            {verificationSuccess && (
+              <p>
+                {verificationMessage}
+              </p>
+
               <button
                 className="primary-button"
-                type="button"
                 onClick={() => {
-                  window.location.href =
-                    "/";
+                  window.history.replaceState(
+                    {},
+                    "",
+                    "/"
+                  );
+
+                  setIsVerificationPage(false);
+                  setPage("auth");
                 }}
               >
-                Go to CareerAI{" "}
-                <span>→</span>
+                Continue to Login
               </button>
-            )}
+            </>
+          )}
 
-            {!verificationSuccess &&
-              !verificationLoading && (
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => {
-                    window.location.href =
-                      "/";
-                  }}
-                >
-                  Back to CareerAI{" "}
-                  <span>→</span>
-                </button>
-              )}
-          </div>
+          {verificationStatus === "error" && (
+            <>
+              <div className="verification-icon error">
+                !
+              </div>
+
+              <h1>Verification Failed</h1>
+
+              <p>
+                {verificationMessage}
+              </p>
+
+              <button
+                className="primary-button"
+                onClick={() => {
+                  window.history.replaceState(
+                    {},
+                    "",
+                    "/"
+                  );
+
+                  setIsVerificationPage(false);
+                  setPage("auth");
+                }}
+              >
+                Back to Login
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
-  // ==========================================
-  // AUTH SCREEN
-  // ==========================================
+  /* =======================================================
+     AUTH PAGE
+  ======================================================= */
 
-  if (!user) {
+  if (!user || page === "auth") {
     return (
       <div className="auth-page">
-        <div className="auth-glow glow-one"></div>
-        <div className="auth-glow glow-two"></div>
-
-        <div className="auth-brand">
-          <div className="brand-symbol">
-            ✦
+        <div className="auth-left">
+          <div className="auth-brand">
+            Career<span>AI</span>
           </div>
 
-          <span>
-            Career<span>AI</span>
-          </span>
-        </div>
-
-        <div className="auth-layout">
-          <div className="auth-intro">
-            <div className="mini-badge">
-              <span className="pulse-dot"></span>
-              AI-POWERED CAREER PLATFORM
+          <div className="auth-hero">
+            <div className="auth-badge">
+              AI-POWERED CAREER ASSISTANT
             </div>
 
             <h1>
-              Your career.
+              Build Your
               <br />
-              <span>
-                Intelligently guided.
-              </span>
+              <span>Future With AI.</span>
             </h1>
 
             <p>
-              Discover internships,
-              understand your skills and
-              build a smarter career path
-              with your personal AI career
-              assistant.
+              Discover internships, get
+              personalized career guidance,
+              and build the skills you need
+              for your future.
             </p>
 
-            <div className="intro-features">
-              <div>
-                <strong>01</strong>
-                <span>
-                  Smart Internship Discovery
-                </span>
+            <div className="auth-features">
+              <div className="auth-feature">
+                <span>✓</span>
+                AI Career Guidance
               </div>
 
-              <div>
-                <strong>02</strong>
-                <span>
-                  AI Career Recommendations
-                </span>
+              <div className="auth-feature">
+                <span>✓</span>
+                Smart Internship Discovery
               </div>
 
-              <div>
-                <strong>03</strong>
-                <span>
-                  Personalized Guidance
-                </span>
+              <div className="auth-feature">
+                <span>✓</span>
+                Personalized Recommendations
               </div>
             </div>
           </div>
+        </div>
 
+        <div className="auth-right">
           <div className="auth-card">
-            <div className="auth-card-top">
-              <div>
-                <span className="eyebrow">
-                  {page === "login"
-                    ? "WELCOME BACK"
-                    : "GET STARTED"}
-                </span>
+            <div className="mobile-auth-logo">
+              Career<span>AI</span>
+            </div>
 
-                <h2>
-                  {page === "login"
-                    ? "Enter your career space"
-                    : "Create your account"}
-                </h2>
-              </div>
+            <div className="auth-card-header">
+              <h2>
+                {isRegister
+                  ? "Create Account"
+                  : "Welcome Back"}
+              </h2>
 
-              <div className="auth-orb">
-                ✦
-              </div>
+              <p>
+                {isRegister
+                  ? "Start your career journey with CareerAI."
+                  : "Sign in to continue your career journey."}
+              </p>
             </div>
 
             {message && (
-              <div className="message-box">
+              <div className="alert-message">
                 {message}
               </div>
             )}
 
-            {page === "login" ? (
-              <form onSubmit={login}>
-                <label>Email</label>
+            <form
+              onSubmit={
+                isRegister
+                  ? register
+                  : login
+              }
+              className="auth-form"
+            >
+              {isRegister && (
+                <div className="form-group">
+                  <label>Full Name</label>
 
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      email:
-                        e.target.value,
-                    })
-                  }
-                  required
-                />
-
-                <label>Password</label>
-
-                <input
-                  type="password"
-                  placeholder="••••••••"
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      password:
-                        e.target.value,
-                    })
-                  }
-                  required
-                />
-
-                <button
-                  className="primary-button"
-                  type="submit"
-                >
-                  Enter CareerAI{" "}
-                  <span>→</span>
-                </button>
-
-                <p className="switch-text">
-                  Don't have an account?
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPage(
-                        "register"
-                      );
-                      setMessage("");
-                    }}
-                  >
-                    Create one
-                  </button>
-                </p>
-              </form>
-            ) : (
-              <form
-                onSubmit={register}
-              >
-                <label>
-                  Full Name
-                </label>
-
-                <input
-                  type="text"
-                  placeholder="Your full name"
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      name:
-                        e.target.value,
-                    })
-                  }
-                  required
-                />
-
-                <label>Email</label>
-
-                <input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      email:
-                        e.target.value,
-                    })
-                  }
-                  required
-                />
-
-                <label>Password</label>
-
-                <input
-                  type="password"
-                  placeholder="Minimum 6 characters"
-                  value={form.password}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      password:
-                        e.target.value,
-                    })
-                  }
-                  required
-                />
-
-                <label>
-                  Account Type
-                </label>
-
-                <div className="role-selector">
-                  <button
-                    type="button"
-                    className={
-                      form.role ===
-                      "student"
-                        ? "role active"
-                        : "role"
-                    }
-                    onClick={() =>
+                  <input
+                    type="text"
+                    placeholder="Enter your name"
+                    value={form.name}
+                    onChange={(e) =>
                       setForm({
                         ...form,
-                        role: "student",
+                        name: e.target.value,
                       })
                     }
-                  >
-                    🎓 Student
-                  </button>
-
-                  <button
-                    type="button"
-                    className={
-                      form.role ===
-                      "company"
-                        ? "role active"
-                        : "role"
-                    }
-                    onClick={() =>
-                      setForm({
-                        ...form,
-                        role: "company",
-                      })
-                    }
-                  >
-                    🏢 Company
-                  </button>
+                    required
+                  />
                 </div>
+              )}
 
-                <button
-                  className="primary-button"
-                  type="submit"
-                >
-                  Create Account{" "}
-                  <span>→</span>
-                </button>
+              <div className="form-group">
+                <label>Email Address</label>
 
-                <p className="switch-text">
-                  Already have an account?
+                <input
+                  type="email"
+                  placeholder="Enter your email"
+                  value={form.email}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      email: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPage("login");
-                      setMessage("");
-                    }}
+              <div className="form-group">
+                <label>Password</label>
+
+                <input
+                  type="password"
+                  placeholder="Enter your password"
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      password: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
+
+              {isRegister && (
+                <div className="form-group">
+                  <label>Account Type</label>
+
+                  <select
+                    value={form.role}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        role: e.target.value,
+                      })
+                    }
                   >
-                    Login
-                  </button>
-                </p>
-              </form>
-            )}
+                    <option value="student">
+                      Student
+                    </option>
+
+                    <option value="company">
+                      Company
+                    </option>
+                  </select>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                className="primary-button auth-submit"
+              >
+                {isRegister
+                  ? "Create Account"
+                  : "Login"}
+              </button>
+            </form>
+
+            <div className="auth-switch">
+              {isRegister
+                ? "Already have an account?"
+                : "Don't have an account?"}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRegister(
+                    !isRegister
+                  );
+                  setMessage("");
+                }}
+              >
+                {isRegister
+                  ? "Login"
+                  : "Register"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // ==========================================
-  // DASHBOARD
-  // ==========================================
+  /* =======================================================
+     DASHBOARD
+  ======================================================= */
 
   return (
     <div className="app-shell">
-
-      {/* ==========================================
-          MAIN SIDEBAR
-      ========================================== */}
+      {/* ===================================================
+          SIDEBAR
+      =================================================== */}
 
       <aside className="sidebar">
-
         <div className="sidebar-logo">
-          <div className="brand-symbol small">
-            ✦
-          </div>
-
-          <span>
-            Career<span>AI</span>
-          </span>
+          Career<span>AI</span>
         </div>
 
-        <div className="sidebar-profile">
-          <div className="avatar">
-            {user.name
-              ?.charAt(0)
-              .toUpperCase()}
-          </div>
+        <div className="sidebar-user">
+          <button
+            className="sidebar-profile-button"
+            onClick={() =>
+              setShowProfile(true)
+            }
+          >
+            <div className="user-avatar">
+              {user.name
+                ? user.name
+                    .charAt(0)
+                    .toUpperCase()
+                : "U"}
+            </div>
 
-          <div>
-            <strong>
-              {user.name}
-            </strong>
+            <div className="sidebar-user-info">
+              <strong>{user.name}</strong>
+              <span>{user.role}</span>
+            </div>
 
-            <small>
-              {user.role}
-            </small>
-          </div>
+            <span className="profile-arrow">
+              ›
+            </span>
+          </button>
         </div>
 
-        <nav>
-          <button className="nav-item active">
-            <span>⌂</span>
+        <nav className="sidebar-nav">
+          <button
+            className={`nav-item ${
+              activeSection === "dashboard"
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              scrollToSection(
+                "dashboard-section",
+                "dashboard"
+              )
+            }
+          >
+            <span className="nav-icon">
+              ⌂
+            </span>
             Dashboard
           </button>
 
           <button
-            className="nav-item"
-            onClick={() => {
-              loadInternships();
-
-              document
-                .getElementById(
-                  "internships"
-                )
-                ?.scrollIntoView({
-                  behavior: "smooth",
-                });
-            }}
+            className={`nav-item ${
+              activeSection === "internships"
+                ? "active"
+                : ""
+            }`}
+            onClick={() =>
+              scrollToSection(
+                "internships-section",
+                "internships"
+              )
+            }
           >
-            <span>◈</span>
+            <span className="nav-icon">
+              ▣
+            </span>
             Internships
           </button>
 
           {user.role === "student" && (
             <button
-              className="nav-item"
+              className={`nav-item ${
+                activeSection === "career"
+                  ? "active"
+                  : ""
+              }`}
               onClick={() =>
-                document
-                  .getElementById(
-                    "ai-section"
-                  )
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                  })
+                scrollToSection(
+                  "ai-section",
+                  "career"
+                )
               }
             >
-              <span>◎</span>
+              <span className="nav-icon">
+                ✦
+              </span>
               My Career
             </button>
           )}
 
           {user.role === "company" && (
             <button
-              className="nav-item"
+              className={`nav-item ${
+                activeSection === "post"
+                  ? "active"
+                  : ""
+              }`}
               onClick={() =>
-                document
-                  .getElementById(
-                    "company-section"
-                  )
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                  })
+                scrollToSection(
+                  "company-section",
+                  "post"
+                )
               }
             >
-              <span>＋</span>
+              <span className="nav-icon">
+                +
+              </span>
               Post Internship
             </button>
           )}
 
           {user.role === "admin" && (
             <button
-              className="nav-item"
+              className={`nav-item ${
+                activeSection === "admin"
+                  ? "active"
+                  : ""
+              }`}
               onClick={() =>
-                loadAdminStats()
+                scrollToSection(
+                  "admin-section",
+                  "admin"
+                )
               }
             >
-              <span>▣</span>
+              <span className="nav-icon">
+                ⚙
+              </span>
               Admin
             </button>
           )}
         </nav>
 
-        <div className="sidebar-bottom">
+        {/* =================================================
+            CHAT HISTORY
+        ================================================= */}
 
-          <div className="ai-status">
-            <span className="pulse-dot"></span>
+        {user.role === "student" && (
+          <div className="chat-history-sidebar">
+            <div className="chat-history-header">
+              <span>CHAT HISTORY</span>
 
-            <div>
-              <strong>
-                AI Online
-              </strong>
+              <button
+                className="new-chat-icon"
+                onClick={startNewChat}
+                title="New Chat"
+              >
+                +
+              </button>
+            </div>
 
-              <small>
-                CareerAI model
-              </small>
+            <button
+              className="new-chat-button"
+              onClick={startNewChat}
+            >
+              <span>＋</span>
+              New Chat
+            </button>
+
+            <div className="chat-history-list">
+              {chatListLoading &&
+                conversations.length === 0 && (
+                  <div className="chat-history-empty">
+                    Loading chats...
+                  </div>
+                )}
+
+              {!chatListLoading &&
+                conversations.length === 0 && (
+                  <div className="chat-history-empty">
+                    No previous chats yet.
+                  </div>
+                )}
+
+              {conversations.map(
+                (conversation) => (
+                  <div
+                    key={conversation.id}
+                    className={`chat-history-item ${
+                      currentConversationId ===
+                      conversation.id
+                        ? "active"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      selectConversation(
+                        conversation.id
+                      )
+                    }
+                  >
+                    <div className="chat-history-item-main">
+                      <span className="chat-history-title">
+                        {conversation.title ||
+                          "New Career Chat"}
+                      </span>
+
+                      <span className="chat-history-date">
+                        {formatDate(
+                          conversation.updated_at ||
+                            conversation.created_at
+                        )}
+                      </span>
+                    </div>
+
+                    <button
+                      className="chat-delete-button"
+                      onClick={(e) =>
+                        deleteConversation(
+                          conversation.id,
+                          e
+                        )
+                      }
+                      title="Delete chat"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )
+              )}
             </div>
           </div>
+        )}
 
+        <div className="sidebar-bottom">
           <button
             className="logout-button"
             onClick={logout}
           >
-            ↪ Logout
+            <span>↪</span>
+            Logout
           </button>
-
         </div>
       </aside>
 
-      {/* ==========================================
-          CHAT SIDEBAR
-      ========================================== */}
-
-      {user.role === "student" && (
-        <aside
-          className={`chat-sidebar ${
-            chatSidebarOpen
-              ? "open"
-              : "closed"
-          }`}
-        >
-
-          <div className="chat-sidebar-header">
-
-            <div>
-              <span className="sidebar-eyebrow">
-                CAREERAI
-              </span>
-
-              <h3>
-                Conversations
-              </h3>
-            </div>
-
-            <button
-              className="sidebar-close"
-              type="button"
-              onClick={() =>
-                setChatSidebarOpen(
-                  false
-                )
-              }
-            >
-              ×
-            </button>
-
-          </div>
-
-          <button
-            className="new-chat-button"
-            type="button"
-            onClick={startNewChat}
-          >
-            <span>＋</span>
-            New Chat
-          </button>
-
-          <div className="conversation-list">
-
-            {conversationsLoading && (
-              <div className="conversation-loading">
-                Loading chats...
-              </div>
-            )}
-
-            {!conversationsLoading &&
-              conversations.length === 0 && (
-                <div className="no-conversations">
-                  <div>✦</div>
-
-                  <p>
-                    No previous chats yet.
-                  </p>
-
-                  <small>
-                    Start a conversation
-                    with CareerAI.
-                  </small>
-                </div>
-              )}
-
-            {conversations.map(
-              (conversation) => (
-                <div
-                  key={
-                    conversation.id
-                  }
-                  className={`conversation-item ${
-                    currentConversationId ===
-                    conversation.id
-                      ? "active"
-                      : ""
-                  }`}
-                >
-
-                  <button
-                    className="conversation-main"
-                    type="button"
-                    onClick={() =>
-                      loadConversation(
-                        conversation.id
-                      )
-                    }
-                  >
-                    <span className="conversation-icon">
-                      ✦
-                    </span>
-
-                    <span className="conversation-title">
-                      {conversation.title ||
-                        "New Career Chat"}
-                    </span>
-                  </button>
-
-                  <button
-                    className="conversation-delete"
-                    type="button"
-                    title="Delete conversation"
-                    onClick={() =>
-                      deleteConversation(
-                        conversation.id
-                      )
-                    }
-                  >
-                    🗑
-                  </button>
-
-                </div>
-              )
-            )}
-
-          </div>
-
-        </aside>
-      )}
-
-      {/* ==========================================
-          SIDEBAR OPEN BUTTON
-      ========================================== */}
-
-      {user.role === "student" &&
-        !chatSidebarOpen && (
-          <button
-            className="sidebar-open-button"
-            type="button"
-            onClick={() =>
-              setChatSidebarOpen(
-                true
-              )
-            }
-          >
-            ☰
-          </button>
-        )}
-
-      {/* ==========================================
-          MAIN CONTENT
-      ========================================== */}
+      {/* ===================================================
+          MAIN
+      =================================================== */}
 
       <main className="main-content">
+        {/* =================================================
+            TOPBAR
+        ================================================= */}
 
         <header className="topbar">
-
           <div>
-            <span className="eyebrow">
-              CAREER COMMAND CENTER
+            <span className="topbar-label">
+              CAREER ASSISTANT
             </span>
 
-            <h1>
-              Good to see you{" "}
-              <span>
-                {user.name?.split(
-                  " "
-                )[0]}
-                .
-              </span>
-            </h1>
+            <h2>
+              Hello, {user.name?.split(" ")[0]}
+              !
+            </h2>
           </div>
 
-          <div className="topbar-right">
-
-            <div className="online-indicator">
-              <span></span>
-              AI Ready
-            </div>
-
-            <div className="top-avatar">
+          <button
+            className="topbar-profile"
+            onClick={() =>
+              setShowProfile(true)
+            }
+          >
+            <div className="topbar-avatar">
               {user.name
-                ?.charAt(0)
-                .toUpperCase()}
+                ? user.name
+                    .charAt(0)
+                    .toUpperCase()
+                : "U"}
             </div>
-
-          </div>
+          </button>
         </header>
 
         {message && (
-          <div className="dashboard-message">
+          <div className="global-message">
             {message}
+            <button
+              onClick={() => setMessage("")}
+            >
+              ×
+            </button>
           </div>
         )}
 
-        {/* ==========================================
-            HERO
-        ========================================== */}
+        {/* =================================================
+            HERO / DASHBOARD
+        ================================================= */}
 
-        <section className="dashboard-hero">
-
-          <div className="hero-content">
-
-            <div className="mini-badge">
-              <span className="pulse-dot"></span>
-              PERSONALIZED FOR YOU
-            </div>
-
-            <h2>
-              Build the career
-              <br />
-              <span>
-                you actually want.
+        <section
+          id="dashboard-section"
+          className="dashboard-section"
+        >
+          <div className="hero-card">
+            <div className="hero-content">
+              <span className="hero-badge">
+                AI-POWERED CAREER PLATFORM
               </span>
-            </h2>
 
-            <p>
-              Explore opportunities,
-              ask your AI assistant and
-              discover the skills you
-              should build next.
-            </p>
+              <h1>
+                Find Internships.
+                <br />
+                <span>
+                  Build Your Future.
+                </span>
+              </h1>
 
-            <div className="hero-actions">
+              <p>
+                CareerAI helps you discover
+                opportunities, understand your
+                career path, and develop the
+                skills employers need.
+              </p>
 
-              <button
-                onClick={() =>
-                  document
-                    .getElementById(
-                      "ai-section"
+              {user.role === "student" && (
+                <button
+                  className="hero-button"
+                  onClick={() =>
+                    scrollToSection(
+                      "ai-section",
+                      "career"
                     )
-                    ?.scrollIntoView({
-                      behavior: "smooth",
-                    })
-                }
-                className="hero-button"
-              >
-                Talk to CareerAI →
-              </button>
+                  }
+                >
+                  Ask CareerAI
+                  <span>→</span>
+                </button>
+              )}
+            </div>
 
-              <button
-                onClick={() =>
-                  document
-                    .getElementById(
-                      "internships"
-                    )
-                    ?.scrollIntoView({
-                      behavior: "smooth",
-                    })
-                }
-                className="hero-secondary"
-              >
-                Explore internships
-              </button>
+            <div className="hero-visual">
+              <div className="hero-orbit orbit-one"></div>
+              <div className="hero-orbit orbit-two"></div>
 
+              <div className="hero-ai-circle">
+                <span>✦</span>
+              </div>
             </div>
           </div>
 
-          <div className="hero-visual">
+          {/* =================================================
+              STATS
+          ================================================= */}
 
-            <div className="ai-orbit orbit-one"></div>
-            <div className="ai-orbit orbit-two"></div>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-icon purple">
+                ✦
+              </div>
 
-            <div className="ai-core">
-              <span>✦</span>
-              <small>AI</small>
+              <div>
+                <span>AI Assistant</span>
+                <strong>24/7</strong>
+              </div>
             </div>
 
-            <div className="floating-chip chip-one">
-              <span>✦</span>
-              Skills
+            <div className="stat-card">
+              <div className="stat-icon green">
+                ▣
+              </div>
+
+              <div>
+                <span>Internships</span>
+                <strong>
+                  {internships.length}
+                </strong>
+              </div>
             </div>
 
-            <div className="floating-chip chip-two">
-              <span>✓</span>
-              Career Match
+            <div className="stat-card">
+              <div className="stat-icon blue">
+                ◎
+              </div>
+
+              <div>
+                <span>Career Support</span>
+                <strong>Smart</strong>
+              </div>
             </div>
 
+            <div className="stat-card">
+              <div className="stat-icon orange">
+                ✓
+              </div>
+
+              <div>
+                <span>Account</span>
+                <strong>Active</strong>
+              </div>
+            </div>
           </div>
-
         </section>
 
-        {/* ==========================================
-            QUICK STATS
-        ========================================== */}
-
-        <section className="stats-grid">
-
-          <div className="stat-card">
-
-            <div className="stat-icon purple">
-              ◈
-            </div>
-
-            <div>
-              <small>
-                OPPORTUNITIES
-              </small>
-
-              <strong>
-                {internships.length}
-              </strong>
-
-              <p>
-                Available internships
-              </p>
-            </div>
-
-          </div>
-
-          <div className="stat-card">
-
-            <div className="stat-icon green">
-              ✦
-            </div>
-
-            <div>
-              <small>
-                AI STATUS
-              </small>
-
-              <strong>
-                Ready
-              </strong>
-
-              <p>
-                Career assistant online
-              </p>
-            </div>
-
-          </div>
-
-          <div className="stat-card">
-
-            <div className="stat-icon purple">
-              ◎
-            </div>
-
-            <div>
-              <small>
-                YOUR ROLE
-              </small>
-
-              <strong>
-                {user.role
-                  .charAt(0)
-                  .toUpperCase() +
-                  user.role.slice(1)}
-              </strong>
-
-              <p>
-                Active account
-              </p>
-            </div>
-
-          </div>
-
-        </section>
-
-        {/* ==========================================
-            STUDENT AI
-        ========================================== */}
+        {/* =================================================
+            STUDENT AI SECTION
+        ================================================= */}
 
         {user.role === "student" && (
-          <>
+          <section
+            id="ai-section"
+            className="content-section"
+          >
+            <div className="section-header">
+              <div>
+                <span className="section-label">
+                  AI CAREER ASSISTANT
+                </span>
 
-            <section
-              id="ai-section"
-              className="section-block"
-            >
+                <h2>
+                  Your Personal Career AI
+                </h2>
 
-              <div className="section-heading">
+                <p>
+                  Ask questions about careers,
+                  internships, skills, projects,
+                  interviews, and learning paths.
+                </p>
+              </div>
 
-                <div>
+              <button
+                className="secondary-button"
+                onClick={startNewChat}
+              >
+                ＋ New Chat
+              </button>
+            </div>
 
-                  <span className="eyebrow">
-                    YOUR AI CAREER ASSISTANT
+            <div className="ai-chat-card">
+              <div className="ai-chat-header">
+                <div className="ai-status">
+                  <div className="ai-status-dot"></div>
+
+                  <div>
+                    <strong>
+                      CareerAI Assistant
+                    </strong>
+
+                    <span>
+                      AI career guidance
+                    </span>
+                  </div>
+                </div>
+
+                {currentConversationId && (
+                  <span className="conversation-status">
+                    Conversation saved
                   </span>
-
-                  <h2>
-                    Ask anything about your
-                    career.
-                  </h2>
-
-                </div>
-
-                <div className="section-number">
-                  01
-                </div>
-
+                )}
               </div>
 
-              <div className="ai-panel">
-
-                <div className="ai-panel-left">
-
-                  <div className="large-ai-icon">
-                    ✦
-                  </div>
-
-                  <h3>
-                    Meet your
-                    <br />
-                    <span>
-                      career copilot.
-                    </span>
-                  </h3>
-
-                  <p>
-                    Ask about technologies,
-                    projects, internships,
-                    interview preparation or
-                    career paths.
-                  </p>
-
-                  <div className="ai-tags">
-                    <span>
-                      Career advice
-                    </span>
-
-                    <span>
-                      Skills
-                    </span>
-
-                    <span>
-                      Projects
-                    </span>
-                  </div>
-
-                </div>
-
-                {/* ==========================================
-                    CHAT
-                ========================================== */}
-
-                <div className="ai-chat">
-
-                  {chatMessages.length ===
-                    0 && (
-                    <div className="chat-message ai">
-
-                      <div className="chat-avatar">
-                        ✦
-                      </div>
-
-                      <div>
-
-                        <small>
-                          CareerAI
-                        </small>
-
-                        <div className="ai-response-content">
-                          <p>
-                            Hi{" "}
-                            {user.name?.split(
-                              " "
-                            )[0]}
-                            ! What would you
-                            like to work on
-                            today?
-                          </p>
-                        </div>
-
-                      </div>
-
-                    </div>
-                  )}
-
-                  {chatMessages.map(
-                    (chat, index) => (
-                      <div
-                        key={index}
-                        className={`chat-message ${
-                          chat.role ===
-                          "user"
-                            ? "user"
-                            : "ai"
-                        }`}
-                      >
-
-                        <div className="chat-avatar">
-
-                          {chat.role ===
-                          "user"
-                            ? user.name
-                                ?.charAt(
-                                  0
-                                )
-                                .toUpperCase()
-                            : "✦"}
-
-                        </div>
-
-                        <div className="chat-message-content">
-
-                          <small>
-                            {chat.role ===
-                            "user"
-                              ? "You"
-                              : "CareerAI"}
-                          </small>
-
-                          {chat.role ===
-                          "assistant" ? (
-                            <div className="ai-response-content">
-                              <ReactMarkdown
-                                remarkPlugins={[
-                                  remarkGfm,
-                                ]}
-                              >
-                                {
-                                  chat.content
-                                }
-                              </ReactMarkdown>
-                            </div>
-                          ) : (
-                            <div className="user-message-content">
-                              <p>
-                                {
-                                  chat.content
-                                }
-                              </p>
-                            </div>
-                          )}
-
-                        </div>
-
-                      </div>
-                    )
-                  )}
-
-                  {aiLoading && (
-                    <div className="chat-message ai">
-
-                      <div className="chat-avatar">
-                        ✦
-                      </div>
-
-                      <div>
-
-                        <small>
-                          CareerAI
-                        </small>
-
-                        <div className="processing">
-                          <span className="processing-dot"></span>
-                          CareerAI is thinking...
-                        </div>
-
-                      </div>
-
-                    </div>
-                  )}
-
-                  <div className="ai-input-area">
-
-                    <input
-                      type="text"
-                      placeholder="Ask your career question..."
-                      value={
-                        aiQuestion
-                      }
-                      onChange={(e) =>
-                        setAiQuestion(
-                          e.target.value
-                        )
-                      }
-                      onKeyDown={(e) => {
-                        if (
-                          e.key ===
-                            "Enter" &&
-                          !e.shiftKey
-                        ) {
-                          e.preventDefault();
-                          askCareerAI();
-                        }
-                      }}
-                    />
-
-                    <button
-                      onClick={
-                        askCareerAI
-                      }
-                      disabled={
-                        aiLoading ||
-                        !aiQuestion.trim()
-                      }
-                    >
-                      {aiLoading
-                        ? "..."
-                        : "↑"}
-                    </button>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </section>
-
-            {/* ==========================================
-                CAREER RECOMMENDATION
-            ========================================== */}
-
-            <section className="section-block">
-
-              <div className="section-heading">
-
-                <div>
-
-                  <span className="eyebrow">
-                    SMART CAREER PATH
-                  </span>
-
-                  <h2>
-                    Discover what you
-                    should do next.
-                  </h2>
-
-                </div>
-
-                <div className="section-number">
-                  02
-                </div>
-
-              </div>
-
-              <div className="recommendation-panel">
-
-                <div className="recommendation-input">
-
-                  <div className="recommendation-icon">
-                    ◎
-                  </div>
-
-                  <div className="recommendation-copy">
-
-                    <h3>
-                      Tell CareerAI
-                      about your skills.
-                    </h3>
-
-                    <p>
-                      Example: "I know
-                      Python, Flask, React
-                      and SQL."
-                    </p>
-
-                  </div>
-
-                  <textarea
-                    placeholder="Describe your current skills, interests or career goal..."
-                    value={
-                      careerQuestion
-                    }
-                    onChange={(e) =>
-                      setCareerQuestion(
-                        e.target.value
-                      )
-                    }
-                  />
-
-                  <button
-                    onClick={
-                      getCareerRecommendation
-                    }
-                    disabled={
-                      careerLoading
-                    }
-                    className="green-button"
-                  >
-                    {careerLoading
-                      ? "Analyzing..."
-                      : "Generate Career Path →"}
-                  </button>
-
-                </div>
-
-                {careerResult && (
-                  <div className="recommendation-result">
-
-                    <div className="result-header">
-
-                      <div>
-
-                        <span className="eyebrow">
-                          AI ANALYSIS COMPLETE
-                        </span>
-
-                        <h3>
-                          Your recommended
-                          direction
-                        </h3>
-
-                      </div>
-
-                      <div className="success-icon">
-                        ✓
-                      </div>
-
-                    </div>
-
-                    <div className="skills-result">
-
-                      <span>
-                        Detected Skills
-                      </span>
-
-                      <strong>
-                        {
-                          careerResult.skills
-                        }
-                      </strong>
-
-                    </div>
-
-                    <div className="recommendation-text">
-
-                      <span>
-                        CAREER RECOMMENDATION
-                      </span>
-
-                      <p>
-                        {
-                          careerResult.recommendation
-                        }
-                      </p>
-
-                    </div>
-
+              <div className="chat-messages">
+                {conversationLoading && (
+                  <div className="chat-loading">
+                    Loading conversation...
                   </div>
                 )}
 
+                {!conversationLoading &&
+                  chatMessages.length === 0 && (
+                    <div className="empty-chat">
+                      <div className="empty-chat-icon">
+                        ✦
+                      </div>
+
+                      <h3>
+                        Start a conversation
+                      </h3>
+
+                      <p>
+                        Ask CareerAI anything
+                        about your career.
+                      </p>
+
+                      <div className="suggestion-grid">
+                        <button
+                          onClick={() =>
+                            setAiQuestion(
+                              "What skills should I learn to become a software engineer?"
+                            )
+                          }
+                        >
+                          Skills for software
+                          engineering
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setAiQuestion(
+                              "How can I prepare for a software engineering internship?"
+                            )
+                          }
+                        >
+                          Internship preparation
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setAiQuestion(
+                              "Which AI and machine learning projects should I build?"
+                            )
+                          }
+                        >
+                          AI/ML project ideas
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setAiQuestion(
+                              "How should I prepare for a technical interview?"
+                            )
+                          }
+                        >
+                          Interview preparation
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                {chatMessages.map(
+                  (chat, index) => (
+                    <div
+                      key={
+                        chat.id ||
+                        `${chat.role}-${index}`
+                      }
+                      className={`chat-message ${
+                        chat.role === "user"
+                          ? "user-message"
+                          : "assistant-message"
+                      }`}
+                    >
+                      <div className="message-avatar">
+                        {chat.role === "user"
+                          ? user.name
+                              ?.charAt(0)
+                              .toUpperCase() ||
+                            "U"
+                          : "✦"}
+                      </div>
+
+                      <div className="message-body">
+                        <div className="message-name">
+                          {chat.role === "user"
+                            ? "You"
+                            : "CareerAI"}
+                        </div>
+
+                        {chat.role === "user" ? (
+                          <div className="user-message-content">
+                            {chat.content}
+                          </div>
+                        ) : (
+                          <div className="ai-response-content">
+                            <ReactMarkdown
+                              remarkPlugins={[
+                                remarkGfm,
+                              ]}
+                              components={
+                                markdownComponents
+                              }
+                            >
+                              {formatAIResponse(
+                                chat.content
+                              )}
+                            </ReactMarkdown>
+                          </div>
+                        )}
+
+                        {chat.created_at && (
+                          <div className="message-time">
+                            {new Date(
+                              chat.created_at
+                            ).toLocaleTimeString(
+                              [],
+                              {
+                                hour: "2-digit",
+                                minute:
+                                  "2-digit",
+                              }
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
+
+                {aiLoading && (
+                  <div className="chat-message assistant-message">
+                    <div className="message-avatar">
+                      ✦
+                    </div>
+
+                    <div className="message-body">
+                      <div className="message-name">
+                        CareerAI
+                      </div>
+
+                      <div className="typing-indicator">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-            </section>
+              <form
+                className="ai-input-area"
+                onSubmit={askCareerAI}
+              >
+                <textarea
+                  value={aiQuestion}
+                  onChange={(e) =>
+                    setAiQuestion(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Ask CareerAI a question..."
+                  rows="2"
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" &&
+                      !e.shiftKey
+                    ) {
+                      e.preventDefault();
+                      askCareerAI();
+                    }
+                  }}
+                />
 
-          </>
+                <button
+                  type="submit"
+                  className="send-button"
+                  disabled={
+                    aiLoading ||
+                    !aiQuestion.trim()
+                  }
+                >
+                  {aiLoading ? "..." : "↑"}
+                </button>
+              </form>
+
+              <div className="ai-input-hint">
+                Press Enter to send • Shift +
+                Enter for a new line
+              </div>
+            </div>
+          </section>
         )}
 
-        {/* ==========================================
-            COMPANY
-        ========================================== */}
+        {/* =================================================
+            CAREER RECOMMENDATION
+        ================================================= */}
+
+        {user.role === "student" && (
+          <section className="content-section">
+            <div className="section-header">
+              <div>
+                <span className="section-label">
+                  PERSONALIZED GUIDANCE
+                </span>
+
+                <h2>
+                  Career Recommendation
+                </h2>
+
+                <p>
+                  Describe your interests and
+                  goals to get a personalized
+                  career direction.
+                </p>
+              </div>
+            </div>
+
+            <div className="recommendation-card">
+              <form
+                className="recommendation-form"
+                onSubmit={
+                  getCareerRecommendation
+                }
+              >
+                <textarea
+                  value={careerQuestion}
+                  onChange={(e) =>
+                    setCareerQuestion(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Example: I enjoy Python, AI, web development and databases. What career path should I follow?"
+                  rows="4"
+                />
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={careerLoading}
+                >
+                  {careerLoading
+                    ? "Analyzing..."
+                    : "Get Recommendation →"}
+                </button>
+              </form>
+
+              {careerResult && (
+                <div className="career-result">
+                  <div className="career-result-header">
+                    <span>
+                      AI RECOMMENDATION
+                    </span>
+                  </div>
+
+                  <div className="career-result-content">
+                    {typeof careerResult ===
+                    "string" ? (
+                      <ReactMarkdown
+                        remarkPlugins={[
+                          remarkGfm,
+                        ]}
+                        components={
+                          markdownComponents
+                        }
+                      >
+                        {formatAIResponse(
+                          careerResult
+                        )}
+                      </ReactMarkdown>
+                    ) : (
+                      Object.entries(
+                        careerResult
+                      ).map(
+                        ([key, value]) => (
+                          <div
+                            className="career-result-item"
+                            key={key}
+                          >
+                            <h4>
+                              {key
+                                .replace(
+                                  /_/g,
+                                  " "
+                                )
+                                .replace(
+                                  /\b\w/g,
+                                  (letter) =>
+                                    letter.toUpperCase()
+                                )}
+                            </h4>
+
+                            <div>
+                              {typeof value ===
+                              "string" ? (
+                                <ReactMarkdown
+                                  remarkPlugins={[
+                                    remarkGfm,
+                                  ]}
+                                  components={
+                                    markdownComponents
+                                  }
+                                >
+                                  {formatAIResponse(
+                                    value
+                                  )}
+                                </ReactMarkdown>
+                              ) : (
+                                <pre>
+                                  {JSON.stringify(
+                                    value,
+                                    null,
+                                    2
+                                  )}
+                                </pre>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      )
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* =================================================
+            COMPANY WORKSPACE
+        ================================================= */}
 
         {user.role === "company" && (
           <section
             id="company-section"
-            className="section-block"
+            className="content-section"
           >
-
-            <div className="section-heading">
-
+            <div className="section-header">
               <div>
-
-                <span className="eyebrow">
+                <span className="section-label">
                   COMPANY WORKSPACE
                 </span>
 
                 <h2>
-                  Find your next intern.
+                  Post an Internship
                 </h2>
 
+                <p>
+                  Publish opportunities for
+                  students on CareerAI.
+                </p>
               </div>
-
             </div>
 
-            <div className="company-layout">
-
+            <div className="company-card">
               <form
                 className="internship-form"
-                onSubmit={
-                  addInternship
-                }
+                onSubmit={addInternship}
               >
-
-                <h3>
-                  Publish an internship
-                </h3>
-
-                <p>
-                  Create an opportunity
-                  and connect with
-                  talented students.
-                </p>
-
-                <input
-                  placeholder="Internship title"
-                  value={
-                    internshipForm.title
-                  }
-                  onChange={(e) =>
-                    setInternshipForm({
-                      ...internshipForm,
-                      title:
-                        e.target.value,
-                    })
-                  }
-                  required
-                />
-
-                <textarea
-                  placeholder="Description"
-                  value={
-                    internshipForm.description
-                  }
-                  onChange={(e) =>
-                    setInternshipForm({
-                      ...internshipForm,
-                      description:
-                        e.target.value,
-                    })
-                  }
-                />
-
-                <input
-                  placeholder="Required skills e.g. Python, React"
-                  value={
-                    internshipForm.skills
-                  }
-                  onChange={(e) =>
-                    setInternshipForm({
-                      ...internshipForm,
-                      skills:
-                        e.target.value,
-                    })
-                  }
-                />
-
                 <div className="form-row">
+                  <div className="form-group">
+                    <label>
+                      Company Name
+                    </label>
 
-                  <input
-                    placeholder="Location"
-                    value={
-                      internshipForm.location
-                    }
-                    onChange={(e) =>
-                      setInternshipForm({
-                        ...internshipForm,
-                        location:
-                          e.target.value,
-                      })
-                    }
-                  />
+                    <input
+                      type="text"
+                      value={
+                        internshipForm.company_name
+                      }
+                      onChange={(e) =>
+                        setInternshipForm({
+                          ...internshipForm,
+                          company_name:
+                            e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </div>
 
-                  <input
-                    placeholder="Stipend"
-                    value={
-                      internshipForm.stipend
-                    }
-                    onChange={(e) =>
-                      setInternshipForm({
-                        ...internshipForm,
-                        stipend:
-                          e.target.value,
-                      })
-                    }
-                  />
+                  <div className="form-group">
+                    <label>
+                      Internship Title
+                    </label>
 
+                    <input
+                      type="text"
+                      value={
+                        internshipForm.title
+                      }
+                      onChange={(e) =>
+                        setInternshipForm({
+                          ...internshipForm,
+                          title:
+                            e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </div>
                 </div>
 
-                <input
-                  placeholder="Duration e.g. 3 months"
-                  value={
-                    internshipForm.duration
-                  }
-                  onChange={(e) =>
-                    setInternshipForm({
-                      ...internshipForm,
-                      duration:
-                        e.target.value,
-                    })
-                  }
-                />
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>
+                      Location
+                    </label>
+
+                    <input
+                      type="text"
+                      value={
+                        internshipForm.location
+                      }
+                      onChange={(e) =>
+                        setInternshipForm({
+                          ...internshipForm,
+                          location:
+                            e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>
+                      Duration
+                    </label>
+
+                    <input
+                      type="text"
+                      placeholder="e.g. 3 months"
+                      value={
+                        internshipForm.duration
+                      }
+                      onChange={(e) =>
+                        setInternshipForm({
+                          ...internshipForm,
+                          duration:
+                            e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>
+                      Stipend
+                    </label>
+
+                    <input
+                      type="text"
+                      placeholder="e.g. PKR 25,000"
+                      value={
+                        internshipForm.stipend
+                      }
+                      onChange={(e) =>
+                        setInternshipForm({
+                          ...internshipForm,
+                          stipend:
+                            e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>
+                      Application Deadline
+                    </label>
+
+                    <input
+                      type="date"
+                      value={
+                        internshipForm.deadline
+                      }
+                      onChange={(e) =>
+                        setInternshipForm({
+                          ...internshipForm,
+                          deadline:
+                            e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    Required Skills
+                  </label>
+
+                  <input
+                    type="text"
+                    placeholder="Python, React, SQL..."
+                    value={
+                      internshipForm.skills
+                    }
+                    onChange={(e) =>
+                      setInternshipForm({
+                        ...internshipForm,
+                        skills:
+                          e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    Requirements
+                  </label>
+
+                  <textarea
+                    rows="4"
+                    value={
+                      internshipForm.requirements
+                    }
+                    onChange={(e) =>
+                      setInternshipForm({
+                        ...internshipForm,
+                        requirements:
+                          e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>
+                    Description
+                  </label>
+
+                  <textarea
+                    rows="5"
+                    value={
+                      internshipForm.description
+                    }
+                    onChange={(e) =>
+                      setInternshipForm({
+                        ...internshipForm,
+                        description:
+                          e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </div>
 
                 <button
-                  className="green-button"
                   type="submit"
+                  className="primary-button"
                 >
                   Publish Internship →
                 </button>
-
               </form>
-
             </div>
-
           </section>
         )}
 
-        {/* ==========================================
+        {/* =================================================
             ADMIN
-        ========================================== */}
+        ================================================= */}
 
         {user.role === "admin" && (
-          <section className="section-block">
-
-            <div className="section-heading">
-
+          <section
+            id="admin-section"
+            className="content-section"
+          >
+            <div className="section-header">
               <div>
-
-                <span className="eyebrow">
-                  ADMIN CONTROL CENTER
+                <span className="section-label">
+                  ADMINISTRATION
                 </span>
 
                 <h2>
-                  Platform overview.
+                  CareerAI Administration
                 </h2>
 
+                <p>
+                  Monitor users and internship
+                  activity.
+                </p>
               </div>
 
+              <button
+                className="secondary-button"
+                onClick={() =>
+                  loadAdminStats(token)
+                }
+              >
+                Refresh
+              </button>
             </div>
 
-            <div className="admin-grid">
+            <div className="admin-stats-grid">
+              <div className="admin-stat-card">
+                <span>Total Users</span>
 
-              <div className="admin-stat">
+                <strong>
+                  {adminStats.users}
+                </strong>
+              </div>
 
+              <div className="admin-stat-card">
                 <span>
-                  USERS
+                  Total Internships
                 </span>
 
                 <strong>
-                  {
-                    adminStats?.total_users ??
-                    "—"
-                  }
+                  {internships.length}
                 </strong>
-
-                <small>
-                  Total registered users
-                </small>
-
               </div>
 
-              <div className="admin-stat">
-
+              <div className="admin-stat-card">
                 <span>
-                  STUDENTS
+                  Platform Status
                 </span>
 
-                <strong>
-                  {
-                    adminStats?.students ??
-                    "—"
-                  }
+                <strong className="online-text">
+                  Online
                 </strong>
-
-                <small>
-                  Student accounts
-                </small>
-
               </div>
-
-              <div className="admin-stat">
-
-                <span>
-                  COMPANIES
-                </span>
-
-                <strong>
-                  {
-                    adminStats?.companies ??
-                    "—"
-                  }
-                </strong>
-
-                <small>
-                  Company accounts
-                </small>
-
-              </div>
-
-              <div className="admin-stat green-admin">
-
-                <span>
-                  INTERNSHIPS
-                </span>
-
-                <strong>
-                  {
-                    adminStats?.total_internships ??
-                    internships.length
-                  }
-                </strong>
-
-                <small>
-                  Published opportunities
-                </small>
-
-              </div>
-
             </div>
-
           </section>
         )}
 
-        {/* ==========================================
+        {/* =================================================
             INTERNSHIPS
-        ========================================== */}
+        ================================================= */}
 
         <section
-          id="internships"
-          className="section-block"
+          id="internships-section"
+          className="content-section"
         >
-
-          <div className="section-heading">
-
+          <div className="section-header">
             <div>
-
-              <span className="eyebrow">
-                OPPORTUNITY BOARD
+              <span className="section-label">
+                OPPORTUNITIES
               </span>
 
               <h2>
-                Internships worth
-                exploring.
+                Available Internships
               </h2>
 
+              <p>
+                Explore available internship
+                opportunities.
+              </p>
             </div>
 
-            <div className="section-number">
-              03
-            </div>
-
+            <button
+              className="secondary-button"
+              onClick={loadInternships}
+            >
+              Refresh
+            </button>
           </div>
 
-          {internships.length ===
-          0 ? (
-            <div className="empty-state">
-
-              <div>
-                ◈
+          {internships.length === 0 ? (
+            <div className="empty-internships">
+              <div className="empty-icon">
+                ▣
               </div>
 
               <h3>
-                No internships yet
+                No internships available
               </h3>
 
               <p>
-                New opportunities will
-                appear here when companies
-                publish them.
+                New opportunities will appear
+                here when companies post them.
               </p>
-
             </div>
           ) : (
             <div className="internship-grid">
-
               {internships.map(
                 (internship) => (
                   <div
                     className="internship-card"
-                    key={
-                      internship.id
-                    }
+                    key={internship.id}
                   >
-
-                    <div className="card-top">
-
-                      <div className="company-mark">
-
-                        {internship.title
-                          ?.charAt(0)
-                          .toUpperCase() ||
-                          "I"}
-
+                    <div className="internship-card-top">
+                      <div className="company-logo">
+                        {(
+                          internship.company_name ||
+                          "C"
+                        )
+                          .charAt(0)
+                          .toUpperCase()}
                       </div>
 
-                      <span className="open-badge">
-                        OPEN
-                      </span>
-
+                      {internship.deadline && (
+                        <span className="deadline-badge">
+                          Deadline:{" "}
+                          {formatDate(
+                            internship.deadline
+                          )}
+                        </span>
+                      )}
                     </div>
 
                     <h3>
-                      {
-                        internship.title
-                      }
+                      {internship.title}
                     </h3>
 
-                    <p className="internship-description">
-                      {
-                        internship.description ||
-                        "Explore this exciting internship opportunity."
-                      }
-                    </p>
-
-                    <div className="skill-tags">
-
-                      {(
-                        internship.skills ||
-                        "General"
-                      )
-                        .split(",")
-                        .slice(0, 4)
-                        .map(
-                          (
-                            skill,
-                            index
-                          ) => (
-                            <span
-                              key={
-                                index
-                              }
-                            >
-                              {skill.trim()}
-                            </span>
-                          )
-                        )}
-
+                    <div className="company-name">
+                      {internship.company_name ||
+                        "Company"}
                     </div>
 
                     <div className="internship-meta">
+                      {internship.location && (
+                        <span>
+                          📍{" "}
+                          {internship.location}
+                        </span>
+                      )}
 
-                      <span>
-                        ⌖{" "}
-                        {
-                          internship.location ||
-                          "Remote"
-                        }
-                      </span>
-
-                      <span>
-                        ◷{" "}
-                        {
-                          internship.duration ||
-                          "Flexible"
-                        }
-                      </span>
-
-                      <span>
-                        ₨{" "}
-                        {
-                          internship.stipend ||
-                          "Not specified"
-                        }
-                      </span>
-
+                      {internship.duration && (
+                        <span>
+                          ◷{" "}
+                          {internship.duration}
+                        </span>
+                      )}
                     </div>
 
-                    {(user.role ===
-                      "company" ||
-                      user.role ===
-                        "admin") && (
+                    {internship.description && (
+                      <p>
+                        {internship.description}
+                      </p>
+                    )}
+
+                    {internship.skills && (
+                      <div className="skill-tags">
+                        {String(
+                          internship.skills
+                        )
+                          .split(",")
+                          .map(
+                            (
+                              skill,
+                              index
+                            ) => (
+                              <span
+                                key={index}
+                              >
+                                {skill.trim()}
+                              </span>
+                            )
+                          )}
+                      </div>
+                    )}
+
+                    {internship.stipend && (
+                      <div className="stipend">
+                        <span>
+                          Stipend
+                        </span>
+
+                        <strong>
+                          {internship.stipend}
+                        </strong>
+                      </div>
+                    )}
+
+                    {user.role ===
+                      "admin" && (
                       <button
                         className="delete-button"
                         onClick={() =>
@@ -2577,41 +2478,132 @@ function App() {
                           )
                         }
                       >
-                        Remove internship
+                        Delete
                       </button>
                     )}
-
                   </div>
                 )
               )}
-
             </div>
           )}
-
         </section>
 
-        {/* ==========================================
+        {/* =================================================
             FOOTER
-        ========================================== */}
+        ================================================= */}
 
-        <footer>
+        <footer className="footer">
+          <div>
+            <strong>
+              Career<span>AI</span>
+            </strong>
 
-          <div className="footer-logo">
-            ✦ CareerAI
+            <p>
+              Smart Internship & Career
+              Assistant
+            </p>
           </div>
 
-          <p>
-            Intelligent career guidance
-            powered by AI.
-          </p>
-
           <span>
-            CareerAI • 2026
+            © 2026 CareerAI. All rights
+            reserved.
           </span>
-
         </footer>
-
       </main>
+
+      {/* ===================================================
+          PROFILE MODAL
+      =================================================== */}
+
+      {showProfile && (
+        <div
+          className="profile-overlay"
+          onClick={() =>
+            setShowProfile(false)
+          }
+        >
+          <div
+            className="profile-modal"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+            <button
+              className="profile-close"
+              onClick={() =>
+                setShowProfile(false)
+              }
+            >
+              ×
+            </button>
+
+            <div className="profile-modal-avatar">
+              {user.name
+                ? user.name
+                    .charAt(0)
+                    .toUpperCase()
+                : "U"}
+            </div>
+
+            <h2>{user.name}</h2>
+
+            <p className="profile-role">
+              {user.role}
+            </p>
+
+            <div className="profile-details">
+              <div className="profile-detail">
+                <span>
+                  Full Name
+                </span>
+
+                <strong>
+                  {user.name}
+                </strong>
+              </div>
+
+              <div className="profile-detail">
+                <span>
+                  Email Address
+                </span>
+
+                <strong>
+                  {user.email}
+                </strong>
+              </div>
+
+              <div className="profile-detail">
+                <span>
+                  Account Type
+                </span>
+
+                <strong>
+                  {user.role}
+                </strong>
+              </div>
+
+              <div className="profile-detail">
+                <span>
+                  User ID
+                </span>
+
+                <strong>
+                  #{user.id}
+                </strong>
+              </div>
+            </div>
+
+            <button
+              className="profile-close-button"
+              onClick={() =>
+                setShowProfile(false)
+              }
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
