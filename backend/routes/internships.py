@@ -10,7 +10,7 @@ internships_bp = Blueprint("internships", __name__)
 # =========================================================
 # GET ALL INTERNSHIPS
 # =========================================================
-
+@internships_bp.route("", methods=["GET"])
 @internships_bp.route("/", methods=["GET"])
 def get_internships():
 
@@ -36,7 +36,7 @@ def get_internships():
 # =========================================================
 # CREATE INTERNSHIP
 # =========================================================
-
+@internships_bp.route("", methods=["POST"])
 @internships_bp.route("/", methods=["POST"])
 @token_required
 @role_required("company", "admin")
