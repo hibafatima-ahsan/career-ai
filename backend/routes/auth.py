@@ -207,7 +207,10 @@ def login():
         return jsonify({
             "error": "Invalid email or password"
         }), 401
-
+    if not user.get("email_verified", False):
+        return jsonify({
+        "error": "Please verify your email before logging in"
+    }), 403
     # Generate JWT token
     token = jwt.encode(
         {

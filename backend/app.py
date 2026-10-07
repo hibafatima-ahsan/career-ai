@@ -4,6 +4,7 @@ from database.supabase_client import supabase
 from routes.auth import auth_bp
 from routes.internships import internships_bp
 from routes.ai import ai_bp
+from routes.chat import chat_bp
 from routes.admin import admin_bp
 app = Flask(__name__)
 CORS(app)
@@ -17,6 +18,7 @@ app.register_blueprint(
     url_prefix="/api/ai"
 )
 app.register_blueprint(admin_bp, url_prefix="/api/admin")
+app.register_blueprint(chat_bp, url_prefix="/api/chat")
 @app.route("/")
 def home():
     return jsonify({

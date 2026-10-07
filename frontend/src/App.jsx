@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "./App.css";
 
 const API = "https://hibafatima.pythonanywhere.com/api";
@@ -26,9 +28,22 @@ function App() {
     duration: "",
   });
 
+  // ==========================================
+  // AI CHAT
+  // ==========================================
+
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+
+  const [currentConversationId, setCurrentConversationId] =
+    useState(null);
+
+  const [chatMessages, setChatMessages] = useState([]);
+
+  // ==========================================
+  // CAREER RECOMMENDATION
+  // ==========================================
 
   const [careerQuestion, setCareerQuestion] = useState("");
   const [careerResult, setCareerResult] = useState(null);
@@ -151,7 +166,76 @@ function App() {
         setInternships(data);
       }
     } catch (error) {
-      console.error(error);
+      console.error("Internship loading error:", error);
+    }
+  };
+
+  // ==========================================
+  // LOAD LATEST CHAT
+  // ==========================================
+
+  const loadLatestChat = async (authToken = token) => {
+    if (!authToken) {
+      return;
+    }
+
+    try {
+      const conversationResponse = await fetch(
+        `${API}/chat/conversations`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      const conversations = await conversationResponse.json();
+
+      if (!conversationResponse.ok) {
+        console.error(
+          "Could not load conversations:",
+          conversations
+        );
+        return;
+      }
+
+      if (!conversations.length) {
+        setCurrentConversationId(null);
+        setChatMessages([]);
+        return;
+      }
+
+      const latestConversation = conversations[0];
+
+      setCurrentConversationId(latestConversation.id);
+
+      const messagesResponse = await fetch(
+        `${API}/chat/conversations/${latestConversation.id}/messages`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      const messages = await messagesResponse.json();
+
+      if (!messagesResponse.ok) {
+        console.error(
+          "Could not load chat messages:",
+          messages
+        );
+        return;
+      }
+
+      setChatMessages(
+        messages.map((item) => ({
+          role: item.role,
+          content: item.content,
+        }))
+      );
+    } catch (error) {
+      console.error("Chat loading error:", error);
     }
   };
 
@@ -239,6 +323,9 @@ function App() {
 
       loadInternships();
 
+      // Load latest saved chat
+      loadLatestChat(data.token);
+
       if (data.user.role === "admin") {
         loadAdminStats(data.token);
       }
@@ -254,11 +341,19 @@ function App() {
 
   const logout = () => {
     localStorage.removeItem("token");
+
     setToken(null);
     setUser(null);
     setPage("login");
+
     setAiAnswer("");
+    setAiQuestion("");
+
+    setChatMessages([]);
+    setCurrentConversationId(null);
+
     setCareerResult(null);
+    setCareerQuestion("");
   };
 
   // ==========================================
@@ -332,10 +427,24 @@ function App() {
   // ==========================================
 
   const askCareerAI = async () => {
-    if (!aiQuestion.trim()) return;
+    const question = aiQuestion.trim();
+
+    if (!question || aiLoading) {
+      return;
+    }
 
     setAiLoading(true);
-    setAiAnswer("");
+
+    // Immediately show user message
+    setChatMessages((prev) => [
+      ...prev,
+      {
+        role: "user",
+        content: question,
+      },
+    ]);
+
+    setAiQuestion("");
 
     try {
       const response = await fetch(`${API}/ai/ask`, {
@@ -345,23 +454,55 @@ function App() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          question: aiQuestion,
+          question,
+          conversation_id: currentConversationId,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setAiAnswer(data.error || "AI request failed.");
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            role: "assistant",
+            content: data.error || "AI request failed.",
+          },
+        ]);
+
         return;
       }
 
-      setAiAnswer(
-        data.answer || data.response || "No answer received."
-      );
+      // Store conversation ID
+      if (data.conversation_id) {
+        setCurrentConversationId(data.conversation_id);
+      }
+
+      const answer =
+        data.answer ||
+        data.response ||
+        "No answer received.";
+
+      // Show AI response
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: answer,
+        },
+      ]);
+
+      setAiAnswer(answer);
     } catch (error) {
-      console.error(error);
-      setAiAnswer("Could not connect to CareerAI.");
+      console.error("AI error:", error);
+
+      setChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Could not connect to CareerAI.",
+        },
+      ]);
     } finally {
       setAiLoading(false);
     }
@@ -372,7 +513,9 @@ function App() {
   // ==========================================
 
   const getCareerRecommendation = async () => {
-    if (!careerQuestion.trim()) return;
+    if (!careerQuestion.trim()) {
+      return;
+    }
 
     setCareerLoading(true);
     setCareerResult(null);
@@ -431,12 +574,13 @@ function App() {
   };
 
   // ==========================================
-  // LOAD INTERNSHIPS WHEN LOGGED IN
+  // LOAD DATA WHEN LOGGED IN
   // ==========================================
 
   useEffect(() => {
     if (token && !isVerificationPage) {
       loadInternships();
+      loadLatestChat(token);
     }
   }, [token, isVerificationPage]);
 
@@ -809,6 +953,7 @@ function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
+
         <div className="sidebar-logo">
           <div className="brand-symbol small">✦</div>
 
@@ -868,12 +1013,13 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
+
           <div className="ai-status">
             <span className="pulse-dot"></span>
 
             <div>
               <strong>AI Online</strong>
-              <small>Qwen local model</small>
+              <small>CareerAI model</small>
             </div>
           </div>
 
@@ -883,23 +1029,29 @@ function App() {
           >
             ↪ Logout
           </button>
+
         </div>
       </aside>
 
       <main className="main-content">
+
         <header className="topbar">
+
           <div>
             <span className="eyebrow">
               CAREER COMMAND CENTER
             </span>
 
             <h1>
-              Good to see you,{" "}
-              <span>{user.name?.split(" ")[0]}.</span>
+              Good to see you{" "}
+              <span>
+                {user.name?.split(" ")[0]}.
+              </span>
             </h1>
           </div>
 
           <div className="topbar-right">
+
             <div className="online-indicator">
               <span></span>
               AI Ready
@@ -908,6 +1060,7 @@ function App() {
             <div className="top-avatar">
               {user.name?.charAt(0).toUpperCase()}
             </div>
+
           </div>
         </header>
 
@@ -917,10 +1070,14 @@ function App() {
           </div>
         )}
 
-        {/* HERO */}
+        {/* ==========================================
+            HERO
+        ========================================== */}
 
         <section className="dashboard-hero">
+
           <div className="hero-content">
+
             <div className="mini-badge">
               <span className="pulse-dot"></span>
               PERSONALIZED FOR YOU
@@ -938,6 +1095,7 @@ function App() {
             </p>
 
             <div className="hero-actions">
+
               <button
                 onClick={() =>
                   document
@@ -963,10 +1121,12 @@ function App() {
               >
                 Explore internships
               </button>
+
             </div>
           </div>
 
           <div className="hero-visual">
+
             <div className="ai-orbit orbit-one"></div>
             <div className="ai-orbit orbit-two"></div>
 
@@ -982,34 +1142,50 @@ function App() {
             <div className="floating-chip chip-two">
               <span>✓</span> Career Match
             </div>
+
           </div>
+
         </section>
 
-        {/* QUICK STATS */}
+        {/* ==========================================
+            QUICK STATS
+        ========================================== */}
 
         <section className="stats-grid">
+
           <div className="stat-card">
-            <div className="stat-icon purple">◈</div>
+
+            <div className="stat-icon purple">
+              ◈
+            </div>
 
             <div>
               <small>OPPORTUNITIES</small>
               <strong>{internships.length}</strong>
               <p>Available internships</p>
             </div>
+
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon green">✦</div>
+
+            <div className="stat-icon green">
+              ✦
+            </div>
 
             <div>
               <small>AI STATUS</small>
               <strong>Ready</strong>
               <p>Career assistant online</p>
             </div>
+
           </div>
 
           <div className="stat-card">
-            <div className="stat-icon purple">◎</div>
+
+            <div className="stat-icon purple">
+              ◎
+            </div>
 
             <div>
               <small>YOUR ROLE</small>
@@ -1021,19 +1197,27 @@ function App() {
 
               <p>Active account</p>
             </div>
+
           </div>
+
         </section>
 
-        {/* STUDENT AI */}
+        {/* ==========================================
+            STUDENT AI
+        ========================================== */}
 
         {user.role === "student" && (
           <>
+
             <section
               id="ai-section"
               className="section-block"
             >
+
               <div className="section-heading">
+
                 <div>
+
                   <span className="eyebrow">
                     YOUR AI CAREER ASSISTANT
                   </span>
@@ -1041,15 +1225,21 @@ function App() {
                   <h2>
                     Ask anything about your career.
                   </h2>
+
                 </div>
 
                 <div className="section-number">
                   01
                 </div>
+
               </div>
 
               <div className="ai-panel">
+
+                {/* AI INFORMATION */}
+
                 <div className="ai-panel-left">
+
                   <div className="large-ai-icon">
                     ✦
                   </div>
@@ -1071,41 +1261,81 @@ function App() {
                     <span>Skills</span>
                     <span>Projects</span>
                   </div>
+
                 </div>
 
+                {/* AI CHAT */}
+
                 <div className="ai-chat">
-                  <div className="chat-message ai">
-                    <div className="chat-avatar">
-                      ✦
-                    </div>
 
-                    <div>
-                      <small>CareerAI</small>
+                  {chatMessages.length === 0 && (
+                    <div className="chat-message ai">
 
-                      <p>
-                        Hi{" "}
-                        {user.name?.split(" ")[0]}!
-                        What would you like to work on
-                        today?
-                      </p>
-                    </div>
-                  </div>
-
-                  {aiAnswer && (
-                    <div className="chat-message ai answer">
                       <div className="chat-avatar">
                         ✦
                       </div>
 
                       <div>
-                        <small>CareerAI</small>
 
-                        <p>{aiAnswer}</p>
+                        <small>
+                          CareerAI
+                        </small>
+
+                        <p>
+                          Hi{" "}
+                          {user.name?.split(" ")[0]}!
+                          What would you like to work on
+                          today?
+                        </p>
+
                       </div>
+
                     </div>
                   )}
 
+                  {chatMessages.map((chat, index) => (
+
+                    <div
+                      key={index}
+                      className={`chat-message ${
+                        chat.role === "user"
+                          ? "user"
+                          : "ai"
+                      }`}
+                    >
+
+                      <div className="chat-avatar">
+
+                        {chat.role === "user"
+                          ? user.name
+                              ?.charAt(0)
+                              .toUpperCase()
+                          : "✦"}
+
+                      </div>
+
+                      <div>
+
+                        <small>
+                          {chat.role === "user"
+                            ? "You"
+                            : "CareerAI"}
+                        </small>
+
+                         <div className="ai-response-content">
+  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+    {chat.content}
+  </ReactMarkdown>
+</div>
+
+                      </div>
+
+                    </div>
+
+                  ))}
+
                   <div className="ai-input-area">
+
                     <input
                       type="text"
                       placeholder="Ask your career question..."
@@ -1126,23 +1356,35 @@ function App() {
                     >
                       {aiLoading ? "..." : "↑"}
                     </button>
+
                   </div>
 
                   {aiLoading && (
                     <div className="processing">
+
                       <span className="processing-dot"></span>
+
                       CareerAI is thinking...
+
                     </div>
                   )}
+
                 </div>
+
               </div>
+
             </section>
 
-            {/* CAREER RECOMMENDATION */}
+            {/* ==========================================
+                CAREER RECOMMENDATION
+            ========================================== */}
 
             <section className="section-block">
+
               <div className="section-heading">
+
                 <div>
+
                   <span className="eyebrow">
                     SMART CAREER PATH
                   </span>
@@ -1150,20 +1392,25 @@ function App() {
                   <h2>
                     Discover what you should do next.
                   </h2>
+
                 </div>
 
                 <div className="section-number">
                   02
                 </div>
+
               </div>
 
               <div className="recommendation-panel">
+
                 <div className="recommendation-input">
+
                   <div className="recommendation-icon">
                     ◎
                   </div>
 
                   <div className="recommendation-copy">
+
                     <h3>
                       Tell CareerAI about your skills.
                     </h3>
@@ -1172,6 +1419,7 @@ function App() {
                       Example: "I know Python, Flask,
                       React and SQL."
                     </p>
+
                   </div>
 
                   <textarea
@@ -1193,12 +1441,17 @@ function App() {
                       ? "Analyzing..."
                       : "Generate Career Path →"}
                   </button>
+
                 </div>
 
                 {careerResult && (
+
                   <div className="recommendation-result">
+
                     <div className="result-header">
+
                       <div>
+
                         <span className="eyebrow">
                           AI ANALYSIS COMPLETE
                         </span>
@@ -1206,22 +1459,29 @@ function App() {
                         <h3>
                           Your recommended direction
                         </h3>
+
                       </div>
 
                       <div className="success-icon">
                         ✓
                       </div>
+
                     </div>
 
                     <div className="skills-result">
-                      <span>Detected Skills</span>
+
+                      <span>
+                        Detected Skills
+                      </span>
 
                       <strong>
                         {careerResult.skills}
                       </strong>
+
                     </div>
 
                     <div className="recommendation-text">
+
                       <span>
                         CAREER RECOMMENDATION
                       </span>
@@ -1229,34 +1489,54 @@ function App() {
                       <p>
                         {careerResult.recommendation}
                       </p>
+
                     </div>
+
                   </div>
+
                 )}
+
               </div>
+
             </section>
+
           </>
         )}
 
-        {/* COMPANY */}
+        {/* ==========================================
+            COMPANY
+        ========================================== */}
 
         {user.role === "company" && (
+
           <section className="section-block">
+
             <div className="section-heading">
+
               <div>
+
                 <span className="eyebrow">
                   COMPANY WORKSPACE
                 </span>
 
-                <h2>Find your next intern.</h2>
+                <h2>
+                  Find your next intern.
+                </h2>
+
               </div>
+
             </div>
 
             <div className="company-layout">
+
               <form
                 className="internship-form"
                 onSubmit={addInternship}
               >
-                <h3>Publish an internship</h3>
+
+                <h3>
+                  Publish an internship
+                </h3>
 
                 <p>
                   Create an opportunity and connect with
@@ -1298,6 +1578,7 @@ function App() {
                 />
 
                 <div className="form-row">
+
                   <input
                     placeholder="Location"
                     value={internshipForm.location}
@@ -1319,6 +1600,7 @@ function App() {
                       })
                     }
                   />
+
                 </div>
 
                 <input
@@ -1338,57 +1620,85 @@ function App() {
                 >
                   Publish Internship →
                 </button>
+
               </form>
+
             </div>
+
           </section>
+
         )}
 
-        {/* ADMIN */}
+        {/* ==========================================
+            ADMIN
+        ========================================== */}
 
         {user.role === "admin" && (
+
           <section className="section-block">
+
             <div className="section-heading">
+
               <div>
+
                 <span className="eyebrow">
                   ADMIN CONTROL CENTER
                 </span>
 
-                <h2>Platform overview.</h2>
+                <h2>
+                  Platform overview.
+                </h2>
+
               </div>
+
             </div>
 
             <div className="admin-grid">
+
               <div className="admin-stat">
+
                 <span>USERS</span>
 
                 <strong>
                   {adminStats?.total_users ?? "—"}
                 </strong>
 
-                <small>Total registered users</small>
+                <small>
+                  Total registered users
+                </small>
+
               </div>
 
               <div className="admin-stat">
+
                 <span>STUDENTS</span>
 
                 <strong>
                   {adminStats?.students ?? "—"}
                 </strong>
 
-                <small>Student accounts</small>
+                <small>
+                  Student accounts
+                </small>
+
               </div>
 
               <div className="admin-stat">
+
                 <span>COMPANIES</span>
 
                 <strong>
                   {adminStats?.companies ?? "—"}
                 </strong>
 
-                <small>Company accounts</small>
+                <small>
+                  Company accounts
+                </small>
+
               </div>
 
               <div className="admin-stat green-admin">
+
                 <span>INTERNSHIPS</span>
 
                 <strong>
@@ -1399,19 +1709,28 @@ function App() {
                 <small>
                   Published opportunities
                 </small>
+
               </div>
+
             </div>
+
           </section>
+
         )}
 
-        {/* INTERNSHIPS */}
+        {/* ==========================================
+            INTERNSHIPS
+        ========================================== */}
 
         <section
           id="internships"
           className="section-block"
         >
+
           <div className="section-heading">
+
             <div>
+
               <span className="eyebrow">
                 OPPORTUNITY BOARD
               </span>
@@ -1419,44 +1738,64 @@ function App() {
               <h2>
                 Internships worth exploring.
               </h2>
+
             </div>
 
             <div className="section-number">
               03
             </div>
+
           </div>
 
           {internships.length === 0 ? (
-            <div className="empty-state">
-              <div>◈</div>
 
-              <h3>No internships yet</h3>
+            <div className="empty-state">
+
+              <div>
+                ◈
+              </div>
+
+              <h3>
+                No internships yet
+              </h3>
 
               <p>
                 New opportunities will appear here when
                 companies publish them.
               </p>
+
             </div>
+
           ) : (
+
             <div className="internship-grid">
+
               {internships.map((internship) => (
+
                 <div
                   className="internship-card"
                   key={internship.id}
                 >
+
                   <div className="card-top">
+
                     <div className="company-mark">
+
                       {internship.title
                         ?.charAt(0)
                         .toUpperCase() || "I"}
+
                     </div>
 
                     <span className="open-badge">
                       OPEN
                     </span>
+
                   </div>
 
-                  <h3>{internship.title}</h3>
+                  <h3>
+                    {internship.title}
+                  </h3>
 
                   <p className="internship-description">
                     {internship.description ||
@@ -1464,19 +1803,26 @@ function App() {
                   </p>
 
                   <div className="skill-tags">
+
                     {(internship.skills || "General")
                       .split(",")
                       .slice(0, 4)
                       .map((skill, index) => (
+
                         <span key={index}>
                           {skill.trim()}
                         </span>
+
                       ))}
+
                   </div>
 
                   <div className="internship-meta">
+
                     <span>
-                      ⌖ {internship.location || "Remote"}
+                      ⌖{" "}
+                      {internship.location ||
+                        "Remote"}
                     </span>
 
                     <span>
@@ -1490,10 +1836,12 @@ function App() {
                       {internship.stipend ||
                         "Not specified"}
                     </span>
+
                   </div>
 
                   {(user.role === "company" ||
                     user.role === "admin") && (
+
                     <button
                       className="delete-button"
                       onClick={() =>
@@ -1504,14 +1852,25 @@ function App() {
                     >
                       Remove internship
                     </button>
+
                   )}
+
                 </div>
+
               ))}
+
             </div>
+
           )}
+
         </section>
 
+        {/* ==========================================
+            FOOTER
+        ========================================== */}
+
         <footer>
+
           <div className="footer-logo">
             ✦ CareerAI
           </div>
@@ -1520,8 +1879,12 @@ function App() {
             Intelligent career guidance powered by AI.
           </p>
 
-          <span>CareerAI • 2026</span>
+          <span>
+            CareerAI • 2026
+          </span>
+
         </footer>
+
       </main>
     </div>
   );

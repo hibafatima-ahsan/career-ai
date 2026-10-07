@@ -1438,3 +1438,79 @@ footer span {
     width: 100%;
   }
 }
+/* ==========================================
+   AI RESPONSE FORMATTING
+   ========================================== */
+
+.ai-response-content {
+  line-height: 1.7;
+  color: inherit;
+}
+
+.ai-response-content p {
+  margin: 0 0 12px;
+}
+
+.ai-response-content p:last-child {
+  margin-bottom: 0;
+}
+
+.ai-response-content h1,
+.ai-response-content h2,
+.ai-response-content h3 {
+  margin: 16px 0 8px;
+  line-height: 1.3;
+}
+
+.ai-response-content h1 {
+  font-size: 1.35rem;
+}
+
+.ai-response-content h2 {
+  font-size: 1.2rem;
+}
+
+.ai-response-content h3 {
+  font-size: 1.05rem;
+}
+
+.ai-response-content ul,
+.ai-response-content ol {
+  margin: 8px 0 14px;
+  padding-left: 24px;
+}
+
+.ai-response-content li {
+  margin-bottom: 5px;
+}
+
+.ai-response-content strong {
+  font-weight: 700;
+}
+
+.ai-response-content code {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  font-family: monospace;
+}
+
+.ai-response-content pre {
+  margin: 12px 0;
+  padding: 14px;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.ai-response-content pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.ai-response-content blockquote {
+  margin: 12px 0;
+  padding-left: 14px;
+  border-left: 3px solid currentColor;
+  opacity: 0.85;
+}
