@@ -51,10 +51,6 @@ def create_internship():
                 "error": "No internship data received."
             }), 400
 
-        # ---------------------------------------------
-        # Validate required fields
-        # ---------------------------------------------
-
         required_fields = [
             "title",
             "description",
@@ -70,10 +66,6 @@ def create_internship():
                     "error": f"{field.replace('_', ' ').title()} is required."
                 }), 400
 
-        # ---------------------------------------------
-        # Create internship object
-        # ---------------------------------------------
-
         internship = {
             "company_id": request.user["user_id"],
             "title": data.get("title"),
@@ -85,10 +77,6 @@ def create_internship():
             "duration": data.get("duration"),
             "deadline": data.get("deadline")
         }
-
-        # ---------------------------------------------
-        # Insert into Supabase
-        # ---------------------------------------------
 
         result = (
             supabase
@@ -132,13 +120,9 @@ def delete_internship(internship_id):
 
     try:
 
-        result = (
-            supabase
-            .table("internships")
-            .delete()
-            .eq("id", internship_id)
-            .execute()
-        )
+        supabase.table("internships").delete().eq(
+            "id", internship_id
+        ).execute()
 
         return jsonify({
             "message": "Internship deleted successfully."

@@ -440,54 +440,99 @@ function App() {
      REGISTER
   ======================================================= */
 
-  const register = async (e) => {
-    e.preventDefault();
+   const register = async (e) => {
+  e.preventDefault();
 
-    setMessage("");
+  setMessage("");
 
-    try {
-      const response = await fetch(
-        `${API}/auth/register`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(form),
-        }
-      );
+  // ============================================
+  // EMAIL VALIDATION
+  // ============================================
 
-      const data = await response.json();
+  const email = form.email.trim();
 
-      if (!response.ok) {
-        setMessage(
-          data.error || "Registration failed"
-        );
-        return;
+  const emailRegex =
+    /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+  if (!emailRegex.test(email)) {
+    setMessage("Please enter a valid email address.");
+    return;
+  }
+
+  // ============================================
+  // PASSWORD VALIDATION
+  // ============================================
+
+  if (form.password.length < 6) {
+    setMessage(
+      "Password must be at least 6 characters long."
+    );
+    return;
+  }
+
+  // ============================================
+  // REGISTER USER
+  // ============================================
+
+  try {
+    const response = await fetch(
+      `${API}/auth/register`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...form,
+          email: email,
+        }),
       }
+    );
 
+    const data = await response.json();
+
+    // ============================================
+    // BACKEND ERROR
+    // ============================================
+
+    if (!response.ok) {
       setMessage(
-        data.message ||
-          "Registration successful. Please verify your email."
+        data.error || "Registration failed."
       );
-
-      setForm({
-        name: "",
-        email: "",
-        password: "",
-        role: "student",
-      });
-
-      setIsRegister(false);
-    } catch (error) {
-      console.error("Registration error:", error);
-
-      setMessage(
-        "Unable to connect to the server."
-      );
+      return;
     }
-  };
 
+    // ============================================
+    // SUCCESS
+    // ============================================
+
+    setMessage(
+      data.message ||
+        "Registration successful. Please verify your email."
+    );
+
+    // Clear form
+    setForm({
+      name: "",
+      email: "",
+      password: "",
+      role: "student",
+    });
+
+    // Switch back to login
+    setIsRegister(false);
+
+  } catch (error) {
+    console.error(
+      "Registration error:",
+      error
+    );
+
+    setMessage(
+      "Unable to connect to the server."
+    );
+  }
+};
   /* =======================================================
      LOGIN
   ======================================================= */
@@ -574,57 +619,73 @@ function App() {
   ======================================================= */
 
   const addInternship = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!token) {
-      setMessage("Please login first.");
+  if (!token) {
+    setMessage("Please login first.");
+    return;
+  }
+
+  try {
+    const internshipData = {
+      company_name: internshipForm.company_name,
+      title: internshipForm.title,
+      location: internshipForm.location,
+      description: internshipForm.description,
+      requirements: internshipForm.requirements,
+      skills: internshipForm.skills,
+      duration: internshipForm.duration,
+      stipend: internshipForm.stipend,
+      deadline: internshipForm.deadline,
+    };
+
+    const response = await fetch(
+      `${API}/internships`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(internshipData),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(
+        data.error || "Could not add internship"
+      );
+      console.error("Internship error:", data);
       return;
     }
 
-    try {
-      const response = await fetch(
-        `${API}/internships`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(internshipForm),
-        }
-      );
+    setMessage("Internship posted successfully.");
 
-      const data = await response.json();
+    setInternshipForm({
+      company_name: "",
+      title: "",
+      location: "",
+      description: "",
+      requirements: "",
+      skills: "",
+      duration: "",
+      stipend: "",
+      deadline: "",
+    });
 
-      if (!response.ok) {
-        setMessage(
-          data.error || "Could not add internship"
-        );
-        return;
-      }
+    await loadInternships();
 
-      setMessage("Internship posted successfully.");
+  } catch (error) {
 
-      setInternshipForm({
-        company_name: "",
-        title: "",
-        location: "",
-        description: "",
-        requirements: "",
-        skills: "",
-        duration: "",
-        stipend: "",
-        deadline: "",
-      });
+    console.error("Add internship error:", error);
 
-      await loadInternships();
-    } catch (error) {
-      console.error("Add internship error:", error);
-
-      setMessage("Could not post internship.");
-    }
-  };
-
+    setMessage(
+      error.message || "Could not post internship."
+    );
+  }
+};
   /* =======================================================
      DELETE INTERNSHIP
   ======================================================= */
