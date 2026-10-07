@@ -1514,3 +1514,173 @@ footer span {
   border-left: 3px solid currentColor;
   opacity: 0.85;
 }
+/* ==========================================
+   CAREERAI CHAT SIDEBAR
+========================================== */
+
+.chat-sidebar {
+  width: 280px;
+  min-width: 280px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #11131a;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 22px 16px;
+  transition: width 0.25s ease,
+              min-width 0.25s ease,
+              transform 0.25s ease;
+}
+
+.chat-sidebar.closed {
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.chat-sidebar-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.sidebar-eyebrow {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 2px;
+  opacity: 0.55;
+  margin-bottom: 5px;
+}
+
+.chat-sidebar-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.sidebar-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.sidebar-close:hover {
+  opacity: 1;
+}
+
+.new-chat-button {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 18px;
+}
+
+.new-chat-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.new-chat-button span {
+  font-size: 18px;
+  margin-right: 7px;
+}
+
+.conversation-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.conversation-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+  border-radius: 10px;
+}
+
+.conversation-item.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.conversation-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 11px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.conversation-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.conversation-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.conversation-delete {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 8px;
+  opacity: 0.35;
+}
+
+.conversation-delete:hover {
+  opacity: 1;
+}
+
+.conversation-loading,
+.no-conversations {
+  padding: 20px 10px;
+  text-align: center;
+  opacity: 0.55;
+  font-size: 13px;
+}
+
+.no-conversations div {
+  font-size: 25px;
+  margin-bottom: 10px;
+}
+
+.no-conversations p {
+  margin: 0 0 5px;
+}
+
+.no-conversations small {
+  line-height: 1.5;
+}
+
+.sidebar-open-button {
+  position: fixed;
+  left: 15px;
+  bottom: 20px;
+  z-index: 100;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: #11131a;
+  color: inherit;
+  padding: 10px 13px;
+  cursor: pointer;
+}

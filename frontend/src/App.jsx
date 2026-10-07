@@ -41,6 +41,13 @@ function App() {
 
   const [chatMessages, setChatMessages] = useState([]);
 
+  const [conversations, setConversations] = useState([]);
+
+  const [chatSidebarOpen, setChatSidebarOpen] = useState(true);
+
+  const [conversationsLoading, setConversationsLoading] =
+    useState(false);
+
   // ==========================================
   // CAREER RECOMMENDATION
   // ==========================================
@@ -64,17 +71,21 @@ function App() {
   ).get("token");
 
   const isVerificationPage =
-    currentPath === "/verify-email" || Boolean(verificationToken);
+    currentPath === "/verify-email" ||
+    Boolean(verificationToken);
 
-  const [verificationMessage, setVerificationMessage] = useState(
-    "Verifying your email..."
-  );
+  const [verificationMessage, setVerificationMessage] =
+    useState("Verifying your email...");
 
-  const [verificationSuccess, setVerificationSuccess] = useState(false);
+  const [verificationSuccess, setVerificationSuccess] =
+    useState(false);
 
-  const [verificationLoading, setVerificationLoading] = useState(
-    isVerificationPage
-  );
+  const [verificationLoading, setVerificationLoading] =
+    useState(isVerificationPage);
+
+  // ==========================================
+  // EMAIL VERIFICATION EFFECT
+  // ==========================================
 
   useEffect(() => {
     if (!isVerificationPage) {
@@ -126,14 +137,18 @@ function App() {
 
         setVerificationSuccess(true);
         setVerificationMessage(
-          data.message || "Email verified successfully."
+          data.message ||
+            "Email verified successfully."
         );
       } catch (error) {
         if (cancelled) {
           return;
         }
 
-        console.error("Email verification error:", error);
+        console.error(
+          "Email verification error:",
+          error
+        );
 
         setVerificationSuccess(false);
         setVerificationMessage(
@@ -159,28 +174,38 @@ function App() {
 
   const loadInternships = async () => {
     try {
-      const response = await fetch(`${API}/internships/`);
+      const response = await fetch(
+        `${API}/internships/`
+      );
+
       const data = await response.json();
 
       if (response.ok) {
         setInternships(data);
       }
     } catch (error) {
-      console.error("Internship loading error:", error);
+      console.error(
+        "Internship loading error:",
+        error
+      );
     }
   };
 
   // ==========================================
-  // LOAD LATEST CHAT
+  // LOAD ALL CONVERSATIONS
   // ==========================================
 
-  const loadLatestChat = async (authToken = token) => {
+  const loadConversations = async (
+    authToken = token
+  ) => {
     if (!authToken) {
       return;
     }
 
     try {
-      const conversationResponse = await fetch(
+      setConversationsLoading(true);
+
+      const response = await fetch(
         `${API}/chat/conversations`,
         {
           headers: {
@@ -189,7 +214,109 @@ function App() {
         }
       );
 
-      const conversations = await conversationResponse.json();
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(
+          "Could not load conversations:",
+          data
+        );
+        return;
+      }
+
+      setConversations(data || []);
+    } catch (error) {
+      console.error(
+        "Conversation loading error:",
+        error
+      );
+    } finally {
+      setConversationsLoading(false);
+    }
+  };
+
+  // ==========================================
+  // LOAD ONE CONVERSATION
+  // ==========================================
+
+  const loadConversation = async (
+    conversationId,
+    authToken = token
+  ) => {
+    if (!authToken || !conversationId) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/chat/conversations/${conversationId}/messages`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(
+          "Could not load conversation messages:",
+          data
+        );
+        return;
+      }
+
+      setCurrentConversationId(conversationId);
+
+      setChatMessages(
+        (data || []).map((item) => ({
+          role: item.role,
+          content: item.content,
+        }))
+      );
+
+      setAiAnswer("");
+
+      // On smaller screens close sidebar after selecting chat
+      if (window.innerWidth < 900) {
+        setChatSidebarOpen(false);
+      }
+    } catch (error) {
+      console.error(
+        "Conversation loading error:",
+        error
+      );
+    }
+  };
+
+  // ==========================================
+  // LOAD LATEST CHAT
+  // ==========================================
+
+  const loadLatestChat = async (
+    authToken = token
+  ) => {
+    if (!authToken) {
+      return;
+    }
+
+    try {
+      setConversationsLoading(true);
+
+      const conversationResponse =
+        await fetch(
+          `${API}/chat/conversations`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${authToken}`,
+            },
+          }
+        );
+
+      const conversations =
+        await conversationResponse.json();
 
       if (!conversationResponse.ok) {
         console.error(
@@ -199,26 +326,36 @@ function App() {
         return;
       }
 
+      setConversations(
+        conversations || []
+      );
+
       if (!conversations.length) {
         setCurrentConversationId(null);
         setChatMessages([]);
         return;
       }
 
-      const latestConversation = conversations[0];
+      const latestConversation =
+        conversations[0];
 
-      setCurrentConversationId(latestConversation.id);
-
-      const messagesResponse = await fetch(
-        `${API}/chat/conversations/${latestConversation.id}/messages`,
-        {
-          headers: {
-            Authorization: `Bearer ${authToken}`,
-          },
-        }
+      setCurrentConversationId(
+        latestConversation.id
       );
 
-      const messages = await messagesResponse.json();
+      const messagesResponse =
+        await fetch(
+          `${API}/chat/conversations/${latestConversation.id}/messages`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${authToken}`,
+            },
+          }
+        );
+
+      const messages =
+        await messagesResponse.json();
 
       if (!messagesResponse.ok) {
         console.error(
@@ -229,13 +366,84 @@ function App() {
       }
 
       setChatMessages(
-        messages.map((item) => ({
+        (messages || []).map((item) => ({
           role: item.role,
           content: item.content,
         }))
       );
     } catch (error) {
-      console.error("Chat loading error:", error);
+      console.error(
+        "Chat loading error:",
+        error
+      );
+    } finally {
+      setConversationsLoading(false);
+    }
+  };
+
+  // ==========================================
+  // START NEW CHAT
+  // ==========================================
+
+  const startNewChat = () => {
+    setCurrentConversationId(null);
+    setChatMessages([]);
+    setAiQuestion("");
+    setAiAnswer("");
+  };
+
+  // ==========================================
+  // DELETE CONVERSATION
+  // ==========================================
+
+  const deleteConversation = async (
+    conversationId
+  ) => {
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API}/chat/conversations/${conversationId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error(
+          "Delete conversation error:",
+          data
+        );
+        return;
+      }
+
+      setConversations((prev) =>
+        prev.filter(
+          (conversation) =>
+            conversation.id !==
+            conversationId
+        )
+      );
+
+      if (
+        currentConversationId ===
+        conversationId
+      ) {
+        startNewChat();
+      }
+    } catch (error) {
+      console.error(
+        "Could not delete conversation:",
+        error
+      );
     }
   };
 
@@ -248,18 +456,25 @@ function App() {
     setMessage("");
 
     try {
-      const response = await fetch(`${API}/auth/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(form),
-      });
+      const response = await fetch(
+        `${API}/auth/register`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify(form),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(data.error || "Registration failed");
+        setMessage(
+          data.error ||
+            "Registration failed"
+        );
         return;
       }
 
@@ -277,7 +492,9 @@ function App() {
       setPage("login");
     } catch (error) {
       console.error(error);
-      setMessage("Backend connection failed.");
+      setMessage(
+        "Backend connection failed."
+      );
     }
   };
 
@@ -290,25 +507,34 @@ function App() {
     setMessage("");
 
     try {
-      const response = await fetch(`${API}/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-        }),
-      });
+      const response = await fetch(
+        `${API}/auth/login`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            email: form.email,
+            password: form.password,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(data.error || "Login failed");
+        setMessage(
+          data.error || "Login failed"
+        );
         return;
       }
 
-      localStorage.setItem("token", data.token);
+      localStorage.setItem(
+        "token",
+        data.token
+      );
 
       setToken(data.token);
       setUser(data.user);
@@ -323,7 +549,6 @@ function App() {
 
       loadInternships();
 
-      // Load latest saved chat
       loadLatestChat(data.token);
 
       if (data.user.role === "admin") {
@@ -331,7 +556,9 @@ function App() {
       }
     } catch (error) {
       console.error(error);
-      setMessage("Backend connection failed.");
+      setMessage(
+        "Backend connection failed."
+      );
     }
   };
 
@@ -351,9 +578,12 @@ function App() {
 
     setChatMessages([]);
     setCurrentConversationId(null);
+    setConversations([]);
 
     setCareerResult(null);
     setCareerQuestion("");
+
+    setChatSidebarOpen(true);
   };
 
   // ==========================================
@@ -365,23 +595,35 @@ function App() {
     setMessage("");
 
     try {
-      const response = await fetch(`${API}/internships/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(internshipForm),
-      });
+      const response = await fetch(
+        `${API}/internships/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization:
+              `Bearer ${token}`,
+          },
+          body: JSON.stringify(
+            internshipForm
+          ),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        setMessage(data.error || "Could not create internship");
+        setMessage(
+          data.error ||
+            "Could not create internship"
+        );
         return;
       }
 
-      setMessage("Internship published successfully.");
+      setMessage(
+        "Internship published successfully."
+      );
 
       setInternshipForm({
         title: "",
@@ -395,7 +637,9 @@ function App() {
       loadInternships();
     } catch (error) {
       console.error(error);
-      setMessage("Backend connection failed.");
+      setMessage(
+        "Backend connection failed."
+      );
     }
   };
 
@@ -405,20 +649,30 @@ function App() {
 
   const deleteInternship = async (id) => {
     try {
-      const response = await fetch(`${API}/internships/${id}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${API}/internships/${id}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+          },
+        }
+      );
 
       if (response.ok) {
-        setMessage("Internship removed.");
+        setMessage(
+          "Internship removed."
+        );
+
         loadInternships();
       }
     } catch (error) {
       console.error(error);
-      setMessage("Could not delete internship.");
+
+      setMessage(
+        "Could not delete internship."
+      );
     }
   };
 
@@ -427,7 +681,8 @@ function App() {
   // ==========================================
 
   const askCareerAI = async () => {
-    const question = aiQuestion.trim();
+    const question =
+      aiQuestion.trim();
 
     if (!question || aiLoading) {
       return;
@@ -435,7 +690,6 @@ function App() {
 
     setAiLoading(true);
 
-    // Immediately show user message
     setChatMessages((prev) => [
       ...prev,
       {
@@ -447,35 +701,39 @@ function App() {
     setAiQuestion("");
 
     try {
-      const response = await fetch(`${API}/ai/ask`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          question,
-          conversation_id: currentConversationId,
-        }),
-      });
+      const response = await fetch(
+        `${API}/ai/ask`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization:
+              `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            question,
+            conversation_id:
+              currentConversationId,
+          }),
+        }
+      );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (!response.ok) {
         setChatMessages((prev) => [
           ...prev,
           {
             role: "assistant",
-            content: data.error || "AI request failed.",
+            content:
+              data.error ||
+              "AI request failed.",
           },
         ]);
 
         return;
-      }
-
-      // Store conversation ID
-      if (data.conversation_id) {
-        setCurrentConversationId(data.conversation_id);
       }
 
       const answer =
@@ -483,7 +741,12 @@ function App() {
         data.response ||
         "No answer received.";
 
-      // Show AI response
+      if (data.conversation_id) {
+        setCurrentConversationId(
+          data.conversation_id
+        );
+      }
+
       setChatMessages((prev) => [
         ...prev,
         {
@@ -493,14 +756,21 @@ function App() {
       ]);
 
       setAiAnswer(answer);
+
+      // Refresh sidebar so new chat appears
+      await loadConversations();
     } catch (error) {
-      console.error("AI error:", error);
+      console.error(
+        "AI error:",
+        error
+      );
 
       setChatMessages((prev) => [
         ...prev,
         {
           role: "assistant",
-          content: "Could not connect to CareerAI.",
+          content:
+            "Could not connect to CareerAI.",
         },
       ]);
     } finally {
@@ -512,58 +782,80 @@ function App() {
   // CAREER RECOMMENDATION
   // ==========================================
 
-  const getCareerRecommendation = async () => {
-    if (!careerQuestion.trim()) {
-      return;
-    }
-
-    setCareerLoading(true);
-    setCareerResult(null);
-
-    try {
-      const response = await fetch(
-        `${API}/ai/career-recommendation`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            question: careerQuestion,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setMessage(data.error || "Recommendation failed.");
+  const getCareerRecommendation =
+    async () => {
+      if (
+        !careerQuestion.trim()
+      ) {
         return;
       }
 
-      setCareerResult(data);
-    } catch (error) {
-      console.error(error);
-      setMessage("Could not connect to CareerAI.");
-    } finally {
-      setCareerLoading(false);
-    }
-  };
+      setCareerLoading(true);
+      setCareerResult(null);
+
+      try {
+        const response =
+          await fetch(
+            `${API}/ai/career-recommendation`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+                Authorization:
+                  `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                question:
+                  careerQuestion,
+              }),
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          setMessage(
+            data.error ||
+              "Recommendation failed."
+          );
+          return;
+        }
+
+        setCareerResult(data);
+      } catch (error) {
+        console.error(error);
+
+        setMessage(
+          "Could not connect to CareerAI."
+        );
+      } finally {
+        setCareerLoading(false);
+      }
+    };
 
   // ==========================================
   // ADMIN STATS
   // ==========================================
 
-  const loadAdminStats = async (authToken = token) => {
+  const loadAdminStats = async (
+    authToken = token
+  ) => {
     try {
-      const response = await fetch(`${API}/admin/stats`, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
+      const response =
+        await fetch(
+          `${API}/admin/stats`,
+          {
+            headers: {
+              Authorization:
+                `Bearer ${authToken}`,
+            },
+          }
+        );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (response.ok) {
         setAdminStats(data);
@@ -578,7 +870,10 @@ function App() {
   // ==========================================
 
   useEffect(() => {
-    if (token && !isVerificationPage) {
+    if (
+      token &&
+      !isVerificationPage
+    ) {
       loadInternships();
       loadLatestChat(token);
     }
@@ -595,7 +890,9 @@ function App() {
         <div className="auth-glow glow-two"></div>
 
         <div className="auth-brand">
-          <div className="brand-symbol">✦</div>
+          <div className="brand-symbol">
+            ✦
+          </div>
 
           <span>
             Career<span>AI</span>
@@ -612,28 +909,38 @@ function App() {
             <h1>
               Verify your
               <br />
-              <span>CareerAI account.</span>
+              <span>
+                CareerAI account.
+              </span>
             </h1>
 
             <p>
-              Confirm your email address to activate your CareerAI
-              account and access personalized career guidance.
+              Confirm your email address
+              to activate your CareerAI
+              account and access
+              personalized career guidance.
             </p>
 
             <div className="intro-features">
               <div>
                 <strong>01</strong>
-                <span>Secure Account</span>
+                <span>
+                  Secure Account
+                </span>
               </div>
 
               <div>
                 <strong>02</strong>
-                <span>Verified Email</span>
+                <span>
+                  Verified Email
+                </span>
               </div>
 
               <div>
                 <strong>03</strong>
-                <span>Access CareerAI</span>
+                <span>
+                  Access CareerAI
+                </span>
               </div>
             </div>
           </div>
@@ -676,24 +983,29 @@ function App() {
                 className="primary-button"
                 type="button"
                 onClick={() => {
-                  window.location.href = "/";
+                  window.location.href =
+                    "/";
                 }}
               >
-                Go to CareerAI <span>→</span>
+                Go to CareerAI{" "}
+                <span>→</span>
               </button>
             )}
 
-            {!verificationSuccess && !verificationLoading && (
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => {
-                  window.location.href = "/";
-                }}
-              >
-                Back to CareerAI <span>→</span>
-              </button>
-            )}
+            {!verificationSuccess &&
+              !verificationLoading && (
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => {
+                    window.location.href =
+                      "/";
+                  }}
+                >
+                  Back to CareerAI{" "}
+                  <span>→</span>
+                </button>
+              )}
           </div>
         </div>
       </div>
@@ -711,7 +1023,9 @@ function App() {
         <div className="auth-glow glow-two"></div>
 
         <div className="auth-brand">
-          <div className="brand-symbol">✦</div>
+          <div className="brand-symbol">
+            ✦
+          </div>
 
           <span>
             Career<span>AI</span>
@@ -728,29 +1042,39 @@ function App() {
             <h1>
               Your career.
               <br />
-              <span>Intelligently guided.</span>
+              <span>
+                Intelligently guided.
+              </span>
             </h1>
 
             <p>
-              Discover internships, understand your skills and build
-              a smarter career path with your personal AI career
+              Discover internships,
+              understand your skills and
+              build a smarter career path
+              with your personal AI career
               assistant.
             </p>
 
             <div className="intro-features">
               <div>
                 <strong>01</strong>
-                <span>Smart Internship Discovery</span>
+                <span>
+                  Smart Internship Discovery
+                </span>
               </div>
 
               <div>
                 <strong>02</strong>
-                <span>AI Career Recommendations</span>
+                <span>
+                  AI Career Recommendations
+                </span>
               </div>
 
               <div>
                 <strong>03</strong>
-                <span>Personalized Guidance</span>
+                <span>
+                  Personalized Guidance
+                </span>
               </div>
             </div>
           </div>
@@ -771,7 +1095,9 @@ function App() {
                 </h2>
               </div>
 
-              <div className="auth-orb">✦</div>
+              <div className="auth-orb">
+                ✦
+              </div>
             </div>
 
             {message && (
@@ -791,7 +1117,8 @@ function App() {
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      email: e.target.value,
+                      email:
+                        e.target.value,
                     })
                   }
                   required
@@ -806,7 +1133,8 @@ function App() {
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      password: e.target.value,
+                      password:
+                        e.target.value,
                     })
                   }
                   required
@@ -816,7 +1144,8 @@ function App() {
                   className="primary-button"
                   type="submit"
                 >
-                  Enter CareerAI <span>→</span>
+                  Enter CareerAI{" "}
+                  <span>→</span>
                 </button>
 
                 <p className="switch-text">
@@ -825,7 +1154,9 @@ function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      setPage("register");
+                      setPage(
+                        "register"
+                      );
                       setMessage("");
                     }}
                   >
@@ -834,8 +1165,12 @@ function App() {
                 </p>
               </form>
             ) : (
-              <form onSubmit={register}>
-                <label>Full Name</label>
+              <form
+                onSubmit={register}
+              >
+                <label>
+                  Full Name
+                </label>
 
                 <input
                   type="text"
@@ -844,7 +1179,8 @@ function App() {
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      name: e.target.value,
+                      name:
+                        e.target.value,
                     })
                   }
                   required
@@ -859,7 +1195,8 @@ function App() {
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      email: e.target.value,
+                      email:
+                        e.target.value,
                     })
                   }
                   required
@@ -874,19 +1211,23 @@ function App() {
                   onChange={(e) =>
                     setForm({
                       ...form,
-                      password: e.target.value,
+                      password:
+                        e.target.value,
                     })
                   }
                   required
                 />
 
-                <label>Account Type</label>
+                <label>
+                  Account Type
+                </label>
 
                 <div className="role-selector">
                   <button
                     type="button"
                     className={
-                      form.role === "student"
+                      form.role ===
+                      "student"
                         ? "role active"
                         : "role"
                     }
@@ -903,7 +1244,8 @@ function App() {
                   <button
                     type="button"
                     className={
-                      form.role === "company"
+                      form.role ===
+                      "company"
                         ? "role active"
                         : "role"
                     }
@@ -922,7 +1264,8 @@ function App() {
                   className="primary-button"
                   type="submit"
                 >
-                  Create Account <span>→</span>
+                  Create Account{" "}
+                  <span>→</span>
                 </button>
 
                 <p className="switch-text">
@@ -952,10 +1295,17 @@ function App() {
 
   return (
     <div className="app-shell">
+
+      {/* ==========================================
+          MAIN SIDEBAR
+      ========================================== */}
+
       <aside className="sidebar">
 
         <div className="sidebar-logo">
-          <div className="brand-symbol small">✦</div>
+          <div className="brand-symbol small">
+            ✦
+          </div>
 
           <span>
             Career<span>AI</span>
@@ -964,12 +1314,19 @@ function App() {
 
         <div className="sidebar-profile">
           <div className="avatar">
-            {user.name?.charAt(0).toUpperCase()}
+            {user.name
+              ?.charAt(0)
+              .toUpperCase()}
           </div>
 
           <div>
-            <strong>{user.name}</strong>
-            <small>{user.role}</small>
+            <strong>
+              {user.name}
+            </strong>
+
+            <small>
+              {user.role}
+            </small>
           </div>
         </div>
 
@@ -981,21 +1338,53 @@ function App() {
 
           <button
             className="nav-item"
-            onClick={loadInternships}
+            onClick={() => {
+              loadInternships();
+
+              document
+                .getElementById(
+                  "internships"
+                )
+                ?.scrollIntoView({
+                  behavior: "smooth",
+                });
+            }}
           >
             <span>◈</span>
             Internships
           </button>
 
           {user.role === "student" && (
-            <button className="nav-item">
+            <button
+              className="nav-item"
+              onClick={() =>
+                document
+                  .getElementById(
+                    "ai-section"
+                  )
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                  })
+              }
+            >
               <span>◎</span>
               My Career
             </button>
           )}
 
           {user.role === "company" && (
-            <button className="nav-item">
+            <button
+              className="nav-item"
+              onClick={() =>
+                document
+                  .getElementById(
+                    "company-section"
+                  )
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                  })
+              }
+            >
               <span>＋</span>
               Post Internship
             </button>
@@ -1004,7 +1393,9 @@ function App() {
           {user.role === "admin" && (
             <button
               className="nav-item"
-              onClick={() => loadAdminStats()}
+              onClick={() =>
+                loadAdminStats()
+              }
             >
               <span>▣</span>
               Admin
@@ -1018,8 +1409,13 @@ function App() {
             <span className="pulse-dot"></span>
 
             <div>
-              <strong>AI Online</strong>
-              <small>CareerAI model</small>
+              <strong>
+                AI Online
+              </strong>
+
+              <small>
+                CareerAI model
+              </small>
             </div>
           </div>
 
@@ -1033,6 +1429,156 @@ function App() {
         </div>
       </aside>
 
+      {/* ==========================================
+          CHAT SIDEBAR
+      ========================================== */}
+
+      {user.role === "student" && (
+        <aside
+          className={`chat-sidebar ${
+            chatSidebarOpen
+              ? "open"
+              : "closed"
+          }`}
+        >
+
+          <div className="chat-sidebar-header">
+
+            <div>
+              <span className="sidebar-eyebrow">
+                CAREERAI
+              </span>
+
+              <h3>
+                Conversations
+              </h3>
+            </div>
+
+            <button
+              className="sidebar-close"
+              type="button"
+              onClick={() =>
+                setChatSidebarOpen(
+                  false
+                )
+              }
+            >
+              ×
+            </button>
+
+          </div>
+
+          <button
+            className="new-chat-button"
+            type="button"
+            onClick={startNewChat}
+          >
+            <span>＋</span>
+            New Chat
+          </button>
+
+          <div className="conversation-list">
+
+            {conversationsLoading && (
+              <div className="conversation-loading">
+                Loading chats...
+              </div>
+            )}
+
+            {!conversationsLoading &&
+              conversations.length === 0 && (
+                <div className="no-conversations">
+                  <div>✦</div>
+
+                  <p>
+                    No previous chats yet.
+                  </p>
+
+                  <small>
+                    Start a conversation
+                    with CareerAI.
+                  </small>
+                </div>
+              )}
+
+            {conversations.map(
+              (conversation) => (
+                <div
+                  key={
+                    conversation.id
+                  }
+                  className={`conversation-item ${
+                    currentConversationId ===
+                    conversation.id
+                      ? "active"
+                      : ""
+                  }`}
+                >
+
+                  <button
+                    className="conversation-main"
+                    type="button"
+                    onClick={() =>
+                      loadConversation(
+                        conversation.id
+                      )
+                    }
+                  >
+                    <span className="conversation-icon">
+                      ✦
+                    </span>
+
+                    <span className="conversation-title">
+                      {conversation.title ||
+                        "New Career Chat"}
+                    </span>
+                  </button>
+
+                  <button
+                    className="conversation-delete"
+                    type="button"
+                    title="Delete conversation"
+                    onClick={() =>
+                      deleteConversation(
+                        conversation.id
+                      )
+                    }
+                  >
+                    🗑
+                  </button>
+
+                </div>
+              )
+            )}
+
+          </div>
+
+        </aside>
+      )}
+
+      {/* ==========================================
+          SIDEBAR OPEN BUTTON
+      ========================================== */}
+
+      {user.role === "student" &&
+        !chatSidebarOpen && (
+          <button
+            className="sidebar-open-button"
+            type="button"
+            onClick={() =>
+              setChatSidebarOpen(
+                true
+              )
+            }
+          >
+            ☰
+          </button>
+        )}
+
+      {/* ==========================================
+          MAIN CONTENT
+      ========================================== */}
+
       <main className="main-content">
 
         <header className="topbar">
@@ -1045,7 +1591,10 @@ function App() {
             <h1>
               Good to see you{" "}
               <span>
-                {user.name?.split(" ")[0]}.
+                {user.name?.split(
+                  " "
+                )[0]}
+                .
               </span>
             </h1>
           </div>
@@ -1058,7 +1607,9 @@ function App() {
             </div>
 
             <div className="top-avatar">
-              {user.name?.charAt(0).toUpperCase()}
+              {user.name
+                ?.charAt(0)
+                .toUpperCase()}
             </div>
 
           </div>
@@ -1086,12 +1637,16 @@ function App() {
             <h2>
               Build the career
               <br />
-              <span>you actually want.</span>
+              <span>
+                you actually want.
+              </span>
             </h2>
 
             <p>
-              Explore opportunities, ask your AI assistant and
-              discover the skills you should build next.
+              Explore opportunities,
+              ask your AI assistant and
+              discover the skills you
+              should build next.
             </p>
 
             <div className="hero-actions">
@@ -1099,7 +1654,9 @@ function App() {
               <button
                 onClick={() =>
                   document
-                    .getElementById("ai-section")
+                    .getElementById(
+                      "ai-section"
+                    )
                     ?.scrollIntoView({
                       behavior: "smooth",
                     })
@@ -1112,7 +1669,9 @@ function App() {
               <button
                 onClick={() =>
                   document
-                    .getElementById("internships")
+                    .getElementById(
+                      "internships"
+                    )
                     ?.scrollIntoView({
                       behavior: "smooth",
                     })
@@ -1136,11 +1695,13 @@ function App() {
             </div>
 
             <div className="floating-chip chip-one">
-              <span>✦</span> Skills
+              <span>✦</span>
+              Skills
             </div>
 
             <div className="floating-chip chip-two">
-              <span>✓</span> Career Match
+              <span>✓</span>
+              Career Match
             </div>
 
           </div>
@@ -1160,9 +1721,17 @@ function App() {
             </div>
 
             <div>
-              <small>OPPORTUNITIES</small>
-              <strong>{internships.length}</strong>
-              <p>Available internships</p>
+              <small>
+                OPPORTUNITIES
+              </small>
+
+              <strong>
+                {internships.length}
+              </strong>
+
+              <p>
+                Available internships
+              </p>
             </div>
 
           </div>
@@ -1174,9 +1743,17 @@ function App() {
             </div>
 
             <div>
-              <small>AI STATUS</small>
-              <strong>Ready</strong>
-              <p>Career assistant online</p>
+              <small>
+                AI STATUS
+              </small>
+
+              <strong>
+                Ready
+              </strong>
+
+              <p>
+                Career assistant online
+              </p>
             </div>
 
           </div>
@@ -1188,14 +1765,20 @@ function App() {
             </div>
 
             <div>
-              <small>YOUR ROLE</small>
+              <small>
+                YOUR ROLE
+              </small>
 
               <strong>
-                {user.role.charAt(0).toUpperCase() +
+                {user.role
+                  .charAt(0)
+                  .toUpperCase() +
                   user.role.slice(1)}
               </strong>
 
-              <p>Active account</p>
+              <p>
+                Active account
+              </p>
             </div>
 
           </div>
@@ -1223,7 +1806,8 @@ function App() {
                   </span>
 
                   <h2>
-                    Ask anything about your career.
+                    Ask anything about your
+                    career.
                   </h2>
 
                 </div>
@@ -1236,8 +1820,6 @@ function App() {
 
               <div className="ai-panel">
 
-                {/* AI INFORMATION */}
-
                 <div className="ai-panel-left">
 
                   <div className="large-ai-icon">
@@ -1247,28 +1829,42 @@ function App() {
                   <h3>
                     Meet your
                     <br />
-                    <span>career copilot.</span>
+                    <span>
+                      career copilot.
+                    </span>
                   </h3>
 
                   <p>
-                    Ask about technologies, projects,
-                    internships, interview preparation or
+                    Ask about technologies,
+                    projects, internships,
+                    interview preparation or
                     career paths.
                   </p>
 
                   <div className="ai-tags">
-                    <span>Career advice</span>
-                    <span>Skills</span>
-                    <span>Projects</span>
+                    <span>
+                      Career advice
+                    </span>
+
+                    <span>
+                      Skills
+                    </span>
+
+                    <span>
+                      Projects
+                    </span>
                   </div>
 
                 </div>
 
-                {/* AI CHAT */}
+                {/* ==========================================
+                    CHAT
+                ========================================== */}
 
                 <div className="ai-chat">
 
-                  {chatMessages.length === 0 && (
+                  {chatMessages.length ===
+                    0 && (
                     <div className="chat-message ai">
 
                       <div className="chat-avatar">
@@ -1281,93 +1877,149 @@ function App() {
                           CareerAI
                         </small>
 
-                        <p>
-                          Hi{" "}
-                          {user.name?.split(" ")[0]}!
-                          What would you like to work on
-                          today?
-                        </p>
+                        <div className="ai-response-content">
+                          <p>
+                            Hi{" "}
+                            {user.name?.split(
+                              " "
+                            )[0]}
+                            ! What would you
+                            like to work on
+                            today?
+                          </p>
+                        </div>
 
                       </div>
 
                     </div>
                   )}
 
-                  {chatMessages.map((chat, index) => (
+                  {chatMessages.map(
+                    (chat, index) => (
+                      <div
+                        key={index}
+                        className={`chat-message ${
+                          chat.role ===
+                          "user"
+                            ? "user"
+                            : "ai"
+                        }`}
+                      >
 
-                    <div
-                      key={index}
-                      className={`chat-message ${
-                        chat.role === "user"
-                          ? "user"
-                          : "ai"
-                      }`}
-                    >
+                        <div className="chat-avatar">
+
+                          {chat.role ===
+                          "user"
+                            ? user.name
+                                ?.charAt(
+                                  0
+                                )
+                                .toUpperCase()
+                            : "✦"}
+
+                        </div>
+
+                        <div className="chat-message-content">
+
+                          <small>
+                            {chat.role ===
+                            "user"
+                              ? "You"
+                              : "CareerAI"}
+                          </small>
+
+                          {chat.role ===
+                          "assistant" ? (
+                            <div className="ai-response-content">
+                              <ReactMarkdown
+                                remarkPlugins={[
+                                  remarkGfm,
+                                ]}
+                              >
+                                {
+                                  chat.content
+                                }
+                              </ReactMarkdown>
+                            </div>
+                          ) : (
+                            <div className="user-message-content">
+                              <p>
+                                {
+                                  chat.content
+                                }
+                              </p>
+                            </div>
+                          )}
+
+                        </div>
+
+                      </div>
+                    )
+                  )}
+
+                  {aiLoading && (
+                    <div className="chat-message ai">
 
                       <div className="chat-avatar">
-
-                        {chat.role === "user"
-                          ? user.name
-                              ?.charAt(0)
-                              .toUpperCase()
-                          : "✦"}
-
+                        ✦
                       </div>
 
                       <div>
 
                         <small>
-                          {chat.role === "user"
-                            ? "You"
-                            : "CareerAI"}
+                          CareerAI
                         </small>
 
-                         <div className="ai-response-content">
-  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-    {chat.content}
-  </ReactMarkdown>
-</div>
+                        <div className="processing">
+                          <span className="processing-dot"></span>
+                          CareerAI is thinking...
+                        </div>
 
                       </div>
 
                     </div>
-
-                  ))}
+                  )}
 
                   <div className="ai-input-area">
 
                     <input
                       type="text"
                       placeholder="Ask your career question..."
-                      value={aiQuestion}
+                      value={
+                        aiQuestion
+                      }
                       onChange={(e) =>
-                        setAiQuestion(e.target.value)
+                        setAiQuestion(
+                          e.target.value
+                        )
                       }
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") {
+                        if (
+                          e.key ===
+                            "Enter" &&
+                          !e.shiftKey
+                        ) {
+                          e.preventDefault();
                           askCareerAI();
                         }
                       }}
                     />
 
                     <button
-                      onClick={askCareerAI}
-                      disabled={aiLoading}
+                      onClick={
+                        askCareerAI
+                      }
+                      disabled={
+                        aiLoading ||
+                        !aiQuestion.trim()
+                      }
                     >
-                      {aiLoading ? "..." : "↑"}
+                      {aiLoading
+                        ? "..."
+                        : "↑"}
                     </button>
 
                   </div>
-
-                  {aiLoading && (
-                    <div className="processing">
-
-                      <span className="processing-dot"></span>
-
-                      CareerAI is thinking...
-
-                    </div>
-                  )}
 
                 </div>
 
@@ -1390,7 +2042,8 @@ function App() {
                   </span>
 
                   <h2>
-                    Discover what you should do next.
+                    Discover what you
+                    should do next.
                   </h2>
 
                 </div>
@@ -1412,19 +2065,23 @@ function App() {
                   <div className="recommendation-copy">
 
                     <h3>
-                      Tell CareerAI about your skills.
+                      Tell CareerAI
+                      about your skills.
                     </h3>
 
                     <p>
-                      Example: "I know Python, Flask,
-                      React and SQL."
+                      Example: "I know
+                      Python, Flask, React
+                      and SQL."
                     </p>
 
                   </div>
 
                   <textarea
                     placeholder="Describe your current skills, interests or career goal..."
-                    value={careerQuestion}
+                    value={
+                      careerQuestion
+                    }
                     onChange={(e) =>
                       setCareerQuestion(
                         e.target.value
@@ -1433,8 +2090,12 @@ function App() {
                   />
 
                   <button
-                    onClick={getCareerRecommendation}
-                    disabled={careerLoading}
+                    onClick={
+                      getCareerRecommendation
+                    }
+                    disabled={
+                      careerLoading
+                    }
                     className="green-button"
                   >
                     {careerLoading
@@ -1445,7 +2106,6 @@ function App() {
                 </div>
 
                 {careerResult && (
-
                   <div className="recommendation-result">
 
                     <div className="result-header">
@@ -1457,7 +2117,8 @@ function App() {
                         </span>
 
                         <h3>
-                          Your recommended direction
+                          Your recommended
+                          direction
                         </h3>
 
                       </div>
@@ -1475,7 +2136,9 @@ function App() {
                       </span>
 
                       <strong>
-                        {careerResult.skills}
+                        {
+                          careerResult.skills
+                        }
                       </strong>
 
                     </div>
@@ -1487,13 +2150,14 @@ function App() {
                       </span>
 
                       <p>
-                        {careerResult.recommendation}
+                        {
+                          careerResult.recommendation
+                        }
                       </p>
 
                     </div>
 
                   </div>
-
                 )}
 
               </div>
@@ -1508,8 +2172,10 @@ function App() {
         ========================================== */}
 
         {user.role === "company" && (
-
-          <section className="section-block">
+          <section
+            id="company-section"
+            className="section-block"
+          >
 
             <div className="section-heading">
 
@@ -1531,7 +2197,9 @@ function App() {
 
               <form
                 className="internship-form"
-                onSubmit={addInternship}
+                onSubmit={
+                  addInternship
+                }
               >
 
                 <h3>
@@ -1539,17 +2207,21 @@ function App() {
                 </h3>
 
                 <p>
-                  Create an opportunity and connect with
+                  Create an opportunity
+                  and connect with
                   talented students.
                 </p>
 
                 <input
                   placeholder="Internship title"
-                  value={internshipForm.title}
+                  value={
+                    internshipForm.title
+                  }
                   onChange={(e) =>
                     setInternshipForm({
                       ...internshipForm,
-                      title: e.target.value,
+                      title:
+                        e.target.value,
                     })
                   }
                   required
@@ -1557,22 +2229,28 @@ function App() {
 
                 <textarea
                   placeholder="Description"
-                  value={internshipForm.description}
+                  value={
+                    internshipForm.description
+                  }
                   onChange={(e) =>
                     setInternshipForm({
                       ...internshipForm,
-                      description: e.target.value,
+                      description:
+                        e.target.value,
                     })
                   }
                 />
 
                 <input
                   placeholder="Required skills e.g. Python, React"
-                  value={internshipForm.skills}
+                  value={
+                    internshipForm.skills
+                  }
                   onChange={(e) =>
                     setInternshipForm({
                       ...internshipForm,
-                      skills: e.target.value,
+                      skills:
+                        e.target.value,
                     })
                   }
                 />
@@ -1581,22 +2259,28 @@ function App() {
 
                   <input
                     placeholder="Location"
-                    value={internshipForm.location}
+                    value={
+                      internshipForm.location
+                    }
                     onChange={(e) =>
                       setInternshipForm({
                         ...internshipForm,
-                        location: e.target.value,
+                        location:
+                          e.target.value,
                       })
                     }
                   />
 
                   <input
                     placeholder="Stipend"
-                    value={internshipForm.stipend}
+                    value={
+                      internshipForm.stipend
+                    }
                     onChange={(e) =>
                       setInternshipForm({
                         ...internshipForm,
-                        stipend: e.target.value,
+                        stipend:
+                          e.target.value,
                       })
                     }
                   />
@@ -1605,11 +2289,14 @@ function App() {
 
                 <input
                   placeholder="Duration e.g. 3 months"
-                  value={internshipForm.duration}
+                  value={
+                    internshipForm.duration
+                  }
                   onChange={(e) =>
                     setInternshipForm({
                       ...internshipForm,
-                      duration: e.target.value,
+                      duration:
+                        e.target.value,
                     })
                   }
                 />
@@ -1626,7 +2313,6 @@ function App() {
             </div>
 
           </section>
-
         )}
 
         {/* ==========================================
@@ -1634,7 +2320,6 @@ function App() {
         ========================================== */}
 
         {user.role === "admin" && (
-
           <section className="section-block">
 
             <div className="section-heading">
@@ -1657,10 +2342,15 @@ function App() {
 
               <div className="admin-stat">
 
-                <span>USERS</span>
+                <span>
+                  USERS
+                </span>
 
                 <strong>
-                  {adminStats?.total_users ?? "—"}
+                  {
+                    adminStats?.total_users ??
+                    "—"
+                  }
                 </strong>
 
                 <small>
@@ -1671,10 +2361,15 @@ function App() {
 
               <div className="admin-stat">
 
-                <span>STUDENTS</span>
+                <span>
+                  STUDENTS
+                </span>
 
                 <strong>
-                  {adminStats?.students ?? "—"}
+                  {
+                    adminStats?.students ??
+                    "—"
+                  }
                 </strong>
 
                 <small>
@@ -1685,10 +2380,15 @@ function App() {
 
               <div className="admin-stat">
 
-                <span>COMPANIES</span>
+                <span>
+                  COMPANIES
+                </span>
 
                 <strong>
-                  {adminStats?.companies ?? "—"}
+                  {
+                    adminStats?.companies ??
+                    "—"
+                  }
                 </strong>
 
                 <small>
@@ -1699,11 +2399,15 @@ function App() {
 
               <div className="admin-stat green-admin">
 
-                <span>INTERNSHIPS</span>
+                <span>
+                  INTERNSHIPS
+                </span>
 
                 <strong>
-                  {adminStats?.total_internships ??
-                    internships.length}
+                  {
+                    adminStats?.total_internships ??
+                    internships.length
+                  }
                 </strong>
 
                 <small>
@@ -1715,7 +2419,6 @@ function App() {
             </div>
 
           </section>
-
         )}
 
         {/* ==========================================
@@ -1736,7 +2439,8 @@ function App() {
               </span>
 
               <h2>
-                Internships worth exploring.
+                Internships worth
+                exploring.
               </h2>
 
             </div>
@@ -1747,8 +2451,8 @@ function App() {
 
           </div>
 
-          {internships.length === 0 ? (
-
+          {internships.length ===
+          0 ? (
             <div className="empty-state">
 
               <div>
@@ -1760,107 +2464,128 @@ function App() {
               </h3>
 
               <p>
-                New opportunities will appear here when
-                companies publish them.
+                New opportunities will
+                appear here when companies
+                publish them.
               </p>
 
             </div>
-
           ) : (
-
             <div className="internship-grid">
 
-              {internships.map((internship) => (
+              {internships.map(
+                (internship) => (
+                  <div
+                    className="internship-card"
+                    key={
+                      internship.id
+                    }
+                  >
 
-                <div
-                  className="internship-card"
-                  key={internship.id}
-                >
+                    <div className="card-top">
 
-                  <div className="card-top">
+                      <div className="company-mark">
 
-                    <div className="company-mark">
+                        {internship.title
+                          ?.charAt(0)
+                          .toUpperCase() ||
+                          "I"}
 
-                      {internship.title
-                        ?.charAt(0)
-                        .toUpperCase() || "I"}
+                      </div>
+
+                      <span className="open-badge">
+                        OPEN
+                      </span>
 
                     </div>
 
-                    <span className="open-badge">
-                      OPEN
-                    </span>
-
-                  </div>
-
-                  <h3>
-                    {internship.title}
-                  </h3>
-
-                  <p className="internship-description">
-                    {internship.description ||
-                      "Explore this exciting internship opportunity."}
-                  </p>
-
-                  <div className="skill-tags">
-
-                    {(internship.skills || "General")
-                      .split(",")
-                      .slice(0, 4)
-                      .map((skill, index) => (
-
-                        <span key={index}>
-                          {skill.trim()}
-                        </span>
-
-                      ))}
-
-                  </div>
-
-                  <div className="internship-meta">
-
-                    <span>
-                      ⌖{" "}
-                      {internship.location ||
-                        "Remote"}
-                    </span>
-
-                    <span>
-                      ◷{" "}
-                      {internship.duration ||
-                        "Flexible"}
-                    </span>
-
-                    <span>
-                      ₨{" "}
-                      {internship.stipend ||
-                        "Not specified"}
-                    </span>
-
-                  </div>
-
-                  {(user.role === "company" ||
-                    user.role === "admin") && (
-
-                    <button
-                      className="delete-button"
-                      onClick={() =>
-                        deleteInternship(
-                          internship.id
-                        )
+                    <h3>
+                      {
+                        internship.title
                       }
-                    >
-                      Remove internship
-                    </button>
+                    </h3>
 
-                  )}
+                    <p className="internship-description">
+                      {
+                        internship.description ||
+                        "Explore this exciting internship opportunity."
+                      }
+                    </p>
 
-                </div>
+                    <div className="skill-tags">
 
-              ))}
+                      {(
+                        internship.skills ||
+                        "General"
+                      )
+                        .split(",")
+                        .slice(0, 4)
+                        .map(
+                          (
+                            skill,
+                            index
+                          ) => (
+                            <span
+                              key={
+                                index
+                              }
+                            >
+                              {skill.trim()}
+                            </span>
+                          )
+                        )}
+
+                    </div>
+
+                    <div className="internship-meta">
+
+                      <span>
+                        ⌖{" "}
+                        {
+                          internship.location ||
+                          "Remote"
+                        }
+                      </span>
+
+                      <span>
+                        ◷{" "}
+                        {
+                          internship.duration ||
+                          "Flexible"
+                        }
+                      </span>
+
+                      <span>
+                        ₨{" "}
+                        {
+                          internship.stipend ||
+                          "Not specified"
+                        }
+                      </span>
+
+                    </div>
+
+                    {(user.role ===
+                      "company" ||
+                      user.role ===
+                        "admin") && (
+                      <button
+                        className="delete-button"
+                        onClick={() =>
+                          deleteInternship(
+                            internship.id
+                          )
+                        }
+                      >
+                        Remove internship
+                      </button>
+                    )}
+
+                  </div>
+                )
+              )}
 
             </div>
-
           )}
 
         </section>
@@ -1876,7 +2601,8 @@ function App() {
           </div>
 
           <p>
-            Intelligent career guidance powered by AI.
+            Intelligent career guidance
+            powered by AI.
           </p>
 
           <span>
